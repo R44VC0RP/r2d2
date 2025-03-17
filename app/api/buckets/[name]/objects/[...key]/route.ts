@@ -15,7 +15,7 @@ const s3 = new S3Client({
 });
 
 type Context = {
-  params: Promise<{ name: string; key: string[] }> | { name: string; key: string[] };
+  params: Promise<{ name: string; key: string[] }>;
 };
 
 export async function GET(

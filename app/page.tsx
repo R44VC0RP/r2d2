@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { FaSearch, FaSync, FaUpload, FaInfoCircle } from 'react-icons/fa';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -11,7 +11,7 @@ import { motion } from 'framer-motion';
 
 import type { Bucket } from '@/types/bucket';
 
-export default function Home() {
+function HomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchPrefix, setSearchPrefix] = useState(searchParams.get('query') || '');
@@ -213,5 +213,14 @@ export default function Home() {
         onClose={() => setIsCreateModalOpen(false)} 
       />
     </main>
+  );
+}
+
+// Export a default function that wraps the component in a Suspense boundary
+export default function Home() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-[#0D1117] text-gray-300 flex items-center justify-center">Loading...</div>}>
+      <HomePage />
+    </Suspense>
   );
 }
