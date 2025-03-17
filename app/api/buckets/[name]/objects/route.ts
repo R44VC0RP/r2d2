@@ -40,6 +40,7 @@ export async function GET(
     const { name: bucketName } = await context.params;
     const { searchParams } = new URL(request.url);
     const searchQuery = searchParams.get('prefix') || '';
+    const filenameQuery = searchParams.get('filename')?.toLowerCase() || '';
     const fileType = searchParams.get('fileType');
     const minSize = searchParams.get('minSize');
     const maxSize = searchParams.get('maxSize');
@@ -50,9 +51,9 @@ export async function GET(
     // Create a command to list objects
     const command = new ListObjectsV2Command({
       Bucket: bucketName,
-      MaxKeys: 50,
+      MaxKeys: 200, // Increased for better filename search with longer terms
       ContinuationToken: continuationToken || undefined,
-      // Always use the search query as prefix to optimize S3 listing
+      // Only use prefix if provided and not too restrictive
       Prefix: searchQuery,
     });
 
@@ -62,9 +63,12 @@ export async function GET(
     // Apply additional filtering
     objects = objects.filter(obj => {
       const key = obj.Key || '';
+      // Extract just the filename part for more accurate filename search
+      const filename = key.split('/').pop()?.toLowerCase() || '';
       
-      // Check if the key contains the search query anywhere (filename search)
-      if (searchQuery && !key.toLowerCase().includes(searchQuery.toLowerCase())) {
+      // If there's a filename query, check if the filename contains it
+      // This is a case-insensitive partial match
+      if (filenameQuery && !filename.includes(filenameQuery)) {
         return false;
       }
 
@@ -107,6 +111,11 @@ export async function GET(
       return new Date(b.LastModified || 0).getTime() - new Date(a.LastModified || 0).getTime();
     });
 
+    // Add cache headers for better performance
+    const headers = new Headers({
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=30',
+    });
+
     return NextResponse.json({
       objects: objects.map(obj => ({
         key: obj.Key,
@@ -116,7 +125,7 @@ export async function GET(
       })),
       nextContinuationToken: response.NextContinuationToken,
       totalObjects: response.KeyCount || 0
-    });
+    }, { headers });
 
   } catch (error) {
     console.error('Error listing objects:', error);

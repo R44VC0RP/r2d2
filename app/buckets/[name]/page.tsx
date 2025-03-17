@@ -205,13 +205,31 @@ export default function BucketView() {
       // Parse the search query
       const parsedSearch = parseSearchQuery(searchQuery);
       
-      // Apply parsed search parameters
+      // Split search into prefix and filename components
       if (parsedSearch.prefix) {
-        searchParams.set('prefix', parsedSearch.prefix);
+        // If the search starts with '/', treat it as a pure prefix search
+        if (parsedSearch.prefix.startsWith('/')) {
+          searchParams.set('prefix', parsedSearch.prefix.slice(1));
+        } else {
+          // Otherwise, use both prefix and filename search for better results
+          searchParams.set('filename', parsedSearch.prefix);
+          
+          // Only use prefix filtering for directory-like searches or very short prefixes
+          // This makes the search more inclusive for longer terms
+          if (parsedSearch.prefix.includes('/')) {
+            // If it has a slash, treat as directory structure and use prefix up to last slash
+            const lastSlashIndex = parsedSearch.prefix.lastIndexOf('/');
+            if (lastSlashIndex > 0) {
+              searchParams.set('prefix', parsedSearch.prefix.substring(0, lastSlashIndex + 1));
+            }
+          } else if (parsedSearch.prefix.length <= 2) {
+            // Only use short prefixes to avoid over-filtering
+            searchParams.set('prefix', parsedSearch.prefix);
+          }
+        }
       }
-      if (parsedSearch.filename) {
-        searchParams.set('filename', parsedSearch.filename);
-      }
+      
+      // Apply other filters
       if (parsedSearch.type) {
         searchParams.set('fileType', parsedSearch.type);
       }
@@ -241,6 +259,8 @@ export default function BucketView() {
     },
     getNextPageParam: (lastPage) => lastPage.nextContinuationToken,
     initialPageParam: null,
+    gcTime: 300000, // Cache for 5 minutes (v5 uses gcTime instead of cacheTime)
+    staleTime: 60000, // Keep data fresh for 1 minute
   });
 
   // Enhanced infinite scroll with early fetching
@@ -283,7 +303,8 @@ export default function BucketView() {
     }
   };
 
-  const allObjects = data?.pages.flatMap((page) => page.objects) ?? [];
+  // Type-safe access to all objects
+  const allObjects = data?.pages.flatMap((page: ObjectsResponse) => page.objects) ?? [];
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
