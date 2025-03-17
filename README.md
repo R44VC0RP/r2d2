@@ -56,7 +56,55 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. It will take a few seconds to load the first time & properly load/cache the data. It will show all of your buckets and the files within them.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Key Features
+
+### 1. Infinite Smooth Scrolling
+- Virtualized list for large bucket contents with minimal memory usage
+- Early fetch triggers (starts loading 1000px before reaching the bottom)
+- Smooth animations for loading states
+- Scroll position maintenance when navigating
+- Automatic pagination handling with continuation tokens
+
+### 2. Advanced Search & Filtering
+- Smart search syntax with prefix and filename components
+- Powerful query syntax with operators:
+  - `type:image` - Filter by file type (image, document, code, media, archive)
+  - `size>1mb` - Files larger than 1MB
+  - `size<1gb` - Files smaller than 1GB
+  - `after:2024-01-01` - Files modified after date
+  - `before:2024-12-31` - Files modified before date
+- Combined server-side and client-side filtering for optimal performance
+- Real-time result updating as you type
+
+### 3. Interactive File Preview System
+- Hover preview for images directly in the file list
+- Automatic file type detection with appropriate previews
+- Thumbnail generation for quick visual browsing
+- Optimized loading with lazy-loading and caching
+- Contextual controls based on file type
+
+### 4. Advanced Drag & Drop File Upload
+- Intuitive drag & drop interface with visual feedback
+- Multi-file upload support
+- Real-time progress tracking with elegant progress bars
+- Configurable parallel uploads (1-10 concurrent uploads)
+- Automatic folder path handling
+- Upload cancellation support
+- Error handling with retry functionality
+
+### 5. React Query Data Management
+- Efficient data caching reduces API calls
+- Real-time data with optimistic updates
+- Prefetching of likely-to-be-needed data
+- Background data refreshing
+- Queryable and filterable data store
+
+### 6. Smooth Animations & Transitions
+- Framer Motion powered animations
+- Micro-interactions for better user feedback
+- Loading states with smooth transitions
+- Interactive element animations
+- Optimized for performance
 
 ## Known Issues
 
