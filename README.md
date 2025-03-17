@@ -9,6 +9,32 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 ```bash
 cp .env.example .env.local
 ```
+1.5. Getting Cloudflare Variables:
+
+![image](https://github.com/user-attachments/assets/e60fd733-4afa-4ed9-b569-9fafea487896)
+
+Click "Manage API Tokens"
+
+Click "Create API Token"
+
+![image](https://github.com/user-attachments/assets/2e1c73b6-9c0f-4182-818e-bf6e1a8e7985)
+
+Make sure the API token you create has ADMIN READ AND WRITE, otherwise you will not be able to list/create/edit and delete buckets. 
+
+![image](https://github.com/user-attachments/assets/40a8e3e2-5acb-4f71-b9fa-0d33655f1223)
+
+Token Value -> CLOUDFLARE_API_TOKEN
+Access Key ID -> CLOUDFLARE_ACCESS_KEY_ID
+Secret Access Key -> CLOUDFLARE_SECRET_ACCESS_KEY
+
+Click "Finish"
+
+Click "← R2"
+
+Then click "API" -> "Use R2 with APIs"
+
+Account ID -> CLOUDFLARE_ACCOUNT_ID
+S3 Compatable API Endpoint -> CLOUDFLARE_R2_ENDPOINT
 
 2. Fill in the environment variables in `.env.local`:
 
