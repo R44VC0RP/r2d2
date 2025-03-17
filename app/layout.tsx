@@ -17,6 +17,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
+      <head>
+        <script
+          crossOrigin="anonymous"
+          src="//unpkg.com/react-scan/dist/auto.global.js"
+        />
+      </head>
       <body className={inter.className}>
         <header className="bg-[#21262D] border-b border-[rgba(240,246,252,0.1)]">
           <div className="max-w-7xl mx-auto px-4 py-3">

@@ -19,8 +19,17 @@ const s3 = new S3Client({
   responseChecksumValidation: "WHEN_REQUIRED"
 });
 
+// File type patterns
+const FILE_TYPES = {
+  images: /\.(jpg|jpeg|png|gif|webp|svg)$/i,
+  documents: /\.(pdf|doc|docx|txt|md|csv)$/i,
+  code: /\.(js|ts|jsx|tsx|html|css|json|yaml|yml)$/i,
+  media: /\.(mp4|mp3|wav|avi|mov)$/i,
+  archives: /\.(zip|rar|7z|tar|gz)$/i,
+};
+
 type Context = {
-  params: Promise<{ name: string }> | { name: string };
+  params: Promise<{ name: string }>;
 };
 
 export async function GET(
@@ -28,68 +37,91 @@ export async function GET(
   context: Context
 ) {
   try {
-    console.log('🚀 Starting GET request');
-    
-    // Ensure we have the bucket name
     const { name: bucketName } = await context.params;
-    console.log('📦 Bucket name:', bucketName);
-    
-    if (!bucketName) {
-      console.log('❌ No bucket name provided');
-      return NextResponse.json(
-        { error: 'Bucket name is required' },
-        { status: 400 }
-      );
-    }
-
-    // Get search parameters
     const { searchParams } = new URL(request.url);
-    const prefix = searchParams.get('prefix') || '';
+    const searchQuery = searchParams.get('prefix') || '';
+    const fileType = searchParams.get('fileType');
+    const minSize = searchParams.get('minSize');
+    const maxSize = searchParams.get('maxSize');
+    const dateFrom = searchParams.get('dateFrom');
+    const dateTo = searchParams.get('dateTo');
     const continuationToken = searchParams.get('continuationToken');
-    console.log('🔍 Search params:', { prefix, continuationToken });
 
-    // Validate credentials
-    if (!process.env.CLOUDFLARE_ACCESS_KEY_ID || !process.env.CLOUDFLARE_SECRET_ACCESS_KEY) {
-      console.log('🔑 Missing R2 credentials');
-      return NextResponse.json(
-        { error: 'R2 credentials not configured' },
-        { status: 500 }
-      );
-    }
-
-    console.log('📝 Creating ListObjectsV2Command');
+    // Create a command to list objects
     const command = new ListObjectsV2Command({
       Bucket: bucketName,
-      Prefix: prefix,
+      MaxKeys: 50,
       ContinuationToken: continuationToken || undefined,
-      MaxKeys: 50, // Limit results per page
+      // Always use the search query as prefix to optimize S3 listing
+      Prefix: searchQuery,
     });
 
-    console.log('📡 Sending request to R2');
     const response = await s3.send(command);
-    console.log('✅ R2 response received:', {
-      objectCount: response.Contents?.length || 0,
-      hasMore: !!response.NextContinuationToken
+    let objects = response.Contents || [];
+
+    // Apply additional filtering
+    objects = objects.filter(obj => {
+      const key = obj.Key || '';
+      
+      // Check if the key contains the search query anywhere (filename search)
+      if (searchQuery && !key.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false;
+      }
+
+      // Apply file type filter
+      if (fileType) {
+        const ext = key.toLowerCase().split('.').pop();
+        const typeMatches = {
+          images: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
+          documents: ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt'],
+          code: ['js', 'ts', 'py', 'java', 'cpp', 'html', 'css', 'json'],
+          media: ['mp3', 'mp4', 'avi', 'mov', 'wav'],
+          archives: ['zip', 'rar', '7z', 'tar', 'gz']
+        };
+        if (!typeMatches[fileType as keyof typeof typeMatches]?.includes(ext || '')) {
+          return false;
+        }
+      }
+
+      // Apply size filters
+      if (minSize && (obj.Size ?? 0) < parseInt(minSize)) {
+        return false;
+      }
+      if (maxSize && (obj.Size ?? 0) > parseInt(maxSize)) {
+        return false;
+      }
+
+      // Apply date filters
+      if (dateFrom && new Date(obj.LastModified!) < new Date(dateFrom)) {
+        return false;
+      }
+      if (dateTo && new Date(obj.LastModified!) > new Date(dateTo)) {
+        return false;
+      }
+
+      return true;
+    });
+
+    // Sort objects by last modified date (newest first)
+    objects.sort((a, b) => {
+      return new Date(b.LastModified || 0).getTime() - new Date(a.LastModified || 0).getTime();
     });
 
     return NextResponse.json({
-      objects: response.Contents?.map((object) => ({
-        key: object.Key,
-        size: object.Size,
-        lastModified: object.LastModified,
-        etag: object.ETag,
-      })) || [],
+      objects: objects.map(obj => ({
+        key: obj.Key,
+        size: obj.Size,
+        lastModified: obj.LastModified,
+        etag: obj.ETag
+      })),
       nextContinuationToken: response.NextContinuationToken,
+      totalObjects: response.KeyCount || 0
     });
-  } catch (error: any) {
-    console.error('💥 Error fetching objects:', {
-      name: error.name,
-      message: error.message,
-      code: error.code,
-      stack: error.stack
-    });
+
+  } catch (error) {
+    console.error('Error listing objects:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch objects', details: error.message },
+      { error: 'Failed to list objects' },
       { status: 500 }
     );
   }
