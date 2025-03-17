@@ -1,9 +1,55 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
 
-const inter = Inter({ subsets: ["latin"] });
+// Load the OverusedGrotesk font family
+const overusedGrotesk = localFont({
+  src: [
+    {
+      path: './fonts/OverusedGrotesk-Light.otf',
+      weight: '300',
+      style: 'normal',
+    },
+    {
+      path: './fonts/OverusedGrotesk-Book.otf',
+      weight: '400',
+      style: 'normal',
+    },
+    {
+      path: './fonts/OverusedGrotesk-Roman.otf',
+      weight: '450',
+      style: 'normal',
+    },
+    {
+      path: './fonts/OverusedGrotesk-Medium.otf',
+      weight: '500',
+      style: 'normal',
+    },
+    {
+      path: './fonts/OverusedGrotesk-SemiBold.otf',
+      weight: '600',
+      style: 'normal',
+    },
+    {
+      path: './fonts/OverusedGrotesk-Bold.otf',
+      weight: '700',
+      style: 'normal',
+    },
+    {
+      path: './fonts/OverusedGrotesk-ExtraBold.otf',
+      weight: '800',
+      style: 'normal',
+    },
+    {
+      path: './fonts/OverusedGrotesk-Black.otf',
+      weight: '900',
+      style: 'normal',
+    },
+  ],
+  display: 'swap',
+  variable: '--font-overused-grotesk',
+});
 
 export const metadata: Metadata = {
   title: "R2D2 - Cloudflare R2 Dashboard",
@@ -16,14 +62,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${overusedGrotesk.variable}`}>
       <head>
         <script
           crossOrigin="anonymous"
           src="//unpkg.com/react-scan/dist/auto.global.js"
         />
       </head>
-      <body className={inter.className}>
+      <body className={overusedGrotesk.className}>
         <header className="bg-[#21262D] border-b border-[rgba(240,246,252,0.1)]">
           <div className="max-w-7xl mx-auto px-4 py-3">
             <div className="flex items-center">

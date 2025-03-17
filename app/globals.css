@@ -3,18 +3,19 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --font-overused: var(--font-overused-grotesk);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-overused);
+  --font-mono: monospace;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #0D1117;
     --foreground: #ededed;
   }
 }
@@ -22,5 +23,15 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-overused), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Custom typography styles for OverusedGrotesk */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+
+input, select, textarea, button {
+  font-family: var(--font-overused), ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
