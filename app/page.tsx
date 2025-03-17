@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaSearch, FaSync, FaUpload, FaInfoCircle } from 'react-icons/fa';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useDebounce } from '@/hooks/useDebounce';
 import { parseSize, formatSize } from '@/utils/size';
@@ -18,11 +18,36 @@ export default function Home() {
   const { data, isLoading, refetch } = useQuery<Bucket[]>({
     queryKey: ['buckets', debouncedSearch],
     queryFn: async () => {
-      const response = await fetch(`/api/buckets${debouncedSearch ? `?query=${debouncedSearch}` : ''}`);
+      const response = await fetch(`/api/buckets${debouncedSearch ? `?query=${debouncedSearch}` : ''}`, {
+        headers: {
+          'Cache-Control': 'max-age=300, stale-while-revalidate=600',
+        },
+      });
       if (!response.ok) throw new Error('Failed to fetch buckets');
       return response.json();
     },
+    staleTime: 30000,
+    gcTime: 3600000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: true,
   });
+
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (data && data.length > 0) {
+      data.slice(0, 3).forEach(bucket => {
+        queryClient.prefetchInfiniteQuery({
+          queryKey: ['bucketObjects', bucket.name, ''],
+          queryFn: async () => {
+            const response = await fetch(`/api/buckets/${encodeURIComponent(bucket.name)}/objects`);
+            if (!response.ok) throw new Error('Failed to fetch objects');
+            return response.json();
+          },
+          initialPageParam: null,
+        });
+      });
+    }
+  }, [data, queryClient]);
 
   // Update URL when search changes
   useEffect(() => {
@@ -39,6 +64,19 @@ export default function Home() {
   const totalStorageBytes = data?.reduce((acc, bucket) => acc + parseSize(bucket.bucketSize || '0 B'), 0) || 0;
   const totalClassA = data?.reduce((acc, bucket) => acc + bucket.classAOperations, 0) || 0;
   const totalClassB = data?.reduce((acc, bucket) => acc + bucket.classBOperations, 0) || 0;
+
+  // Handle bucket hover for prefetching
+  const handleBucketHover = useCallback((bucketName: string) => {
+    queryClient.prefetchInfiniteQuery({
+      queryKey: ['bucketObjects', bucketName, ''],
+      queryFn: async () => {
+        const response = await fetch(`/api/buckets/${encodeURIComponent(bucketName)}/objects`);
+        if (!response.ok) throw new Error('Failed to fetch objects');
+        return response.json();
+      },
+      initialPageParam: null,
+    });
+  }, [queryClient]);
 
   return (
     <main className="min-h-screen bg-[#0D1117] text-gray-300">
@@ -154,6 +192,7 @@ export default function Home() {
                     <tr
                       key={bucket.name}
                       className="hover:bg-[#30363D] transition-colors duration-200"
+                      onMouseEnter={() => handleBucketHover(bucket.name)}
                     >
                       <td className="px-6 py-4 text-sm">
                         <a href={`/buckets/${bucket.name}`} className="text-[#EF6351] hover:text-[#F38375] font-medium">

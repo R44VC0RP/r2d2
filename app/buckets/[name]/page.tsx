@@ -200,6 +200,7 @@ export default function BucketView() {
   } = useInfiniteQuery<ObjectsResponse>({
     queryKey: ['bucketObjects', name, searchQuery],
     queryFn: async ({ pageParam = null }) => {
+      // Use a more optimized query function that can leverage the cache from prefetching
       const searchParams = new URLSearchParams();
       
       // Parse the search query
@@ -207,23 +208,20 @@ export default function BucketView() {
       
       // Split search into prefix and filename components
       if (parsedSearch.prefix) {
-        // If the search starts with '/', treat it as a pure prefix search
+        // Only add search parameters if there is a search query
+        // This ensures we can use the prefetched data when no search is active
         if (parsedSearch.prefix.startsWith('/')) {
           searchParams.set('prefix', parsedSearch.prefix.slice(1));
         } else {
-          // Otherwise, use both prefix and filename search for better results
           searchParams.set('filename', parsedSearch.prefix);
           
           // Only use prefix filtering for directory-like searches or very short prefixes
-          // This makes the search more inclusive for longer terms
           if (parsedSearch.prefix.includes('/')) {
-            // If it has a slash, treat as directory structure and use prefix up to last slash
             const lastSlashIndex = parsedSearch.prefix.lastIndexOf('/');
             if (lastSlashIndex > 0) {
               searchParams.set('prefix', parsedSearch.prefix.substring(0, lastSlashIndex + 1));
             }
           } else if (parsedSearch.prefix.length <= 2) {
-            // Only use short prefixes to avoid over-filtering
             searchParams.set('prefix', parsedSearch.prefix);
           }
         }
@@ -253,14 +251,18 @@ export default function BucketView() {
         searchParams.set('continuationToken', pageParam as string);
       }
 
-      const response = await fetch(`/api/buckets/${encodeURIComponent(name)}/objects?${searchParams}`);
+      // Construction of the API URL with query parameters
+      const queryString = searchParams.toString();
+      const url = `/api/buckets/${encodeURIComponent(name)}/objects${queryString ? `?${queryString}` : ''}`;
+      
+      const response = await fetch(url);
       if (!response.ok) throw new Error('Failed to fetch objects');
       return response.json();
     },
     getNextPageParam: (lastPage) => lastPage.nextContinuationToken,
     initialPageParam: null,
-    gcTime: 300000, // Cache for 5 minutes (v5 uses gcTime instead of cacheTime)
-    staleTime: 60000, // Keep data fresh for 1 minute
+    gcTime: 300000, // 5 minutes - keep in cache longer
+    staleTime: 60000, // 1 minute - keep data fresh
   });
 
   // Enhanced infinite scroll with early fetching

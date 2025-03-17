@@ -181,7 +181,12 @@ export async function GET(request: NextRequest) {
         })
     );
 
-    return NextResponse.json(buckets);
+    // Add cache control headers for the response
+    const headers = new Headers({
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
+    });
+
+    return NextResponse.json(buckets, { headers });
   } catch (error) {
     console.error('Error fetching buckets:', error);
     return NextResponse.json(

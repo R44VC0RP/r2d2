@@ -113,7 +113,7 @@ export async function GET(
 
     // Add cache headers for better performance
     const headers = new Headers({
-      'Cache-Control': 'public, max-age=60, stale-while-revalidate=30',
+      'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
     });
 
     return NextResponse.json({

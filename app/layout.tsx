@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
-
+import Image from "next/image";
 // Load the OverusedGrotesk font family
 const overusedGrotesk = localFont({
   src: [
@@ -73,9 +73,10 @@ export default function RootLayout({
         <header className="bg-[#21262D] border-b border-[rgba(240,246,252,0.1)]">
           <div className="max-w-7xl mx-auto px-4 py-3">
             <div className="flex items-center">
-              <div className="text-[#EF6351] font-semibold text-lg">R2D2</div>
-              <span className="text-gray-400 mx-2">by</span>
-              <div className="text-gray-300">exon</div>
+              <div className="text-[#EF6351] font-semibold text-lg">Cloudflare R2D2</div>
+              <span className="text-gray-400 mx-2">designed by</span>
+              <Image src="/exon.png" alt="exon" width={20} height={20} />
+              <div className="text-gray-300 ml-2">exon</div>
             </div>
           </div>
         </header>
