@@ -58,6 +58,9 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
+## Known Issues
+
+1. On file upload there is a react-hook-form error that prevents immediate file list reload, we are working on this.
 
 ## Learn More
 
