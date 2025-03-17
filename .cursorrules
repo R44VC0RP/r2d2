@@ -4,6 +4,26 @@ BEFORE EVERY RESPONSE, CHECK THE PLAN.MD FILE FOR THE IMPLEMENTATION GUIDELINES 
 
 # Make sure to follow the plan.md file for the implementation guidelines, if you add a feature, make sure to update the plan.md file TODO list.
 
+## Next.js 15 API Routes
+- Always await dynamic route parameters in API routes:
+  ```typescript
+  type Context = {
+    params: Promise<{ [key: string]: string | string[] }> | { [key: string]: string | string[] };
+  };
+
+  export async function GET(
+    request: NextRequest,
+    context: Context
+  ) {
+    const params = await context.params;
+    // Use params...
+  }
+  ```
+- Use proper TypeScript types for params
+- Handle potential undefined values
+- Add error boundaries for param resolution
+- Document param structure in types
+
 ## Styling
 - Use TailwindCSS for all styling
 - Use React Icons (react-icons/fa) for icons
@@ -75,6 +95,10 @@ BEFORE EVERY RESPONSE, CHECK THE PLAN.MD FILE FOR THE IMPLEMENTATION GUIDELINES 
 - Implement optimistic updates
 - Use proper TypeScript types for API responses
 - Cache appropriately with React Query
+- Always await dynamic route parameters
+- Validate route parameters before use
+- Add proper error handling for parameter resolution
+- Use TypeScript to ensure type safety of parameters
 
 ### Metrics Collection Strategy
 1. Short-term (Current Implementation):
@@ -125,27 +149,37 @@ interface BucketMetrics {
    - Provide fallback values
    - Show user-friendly messages
    - Implement retry logic
+   - Handle parameter resolution errors
+   - Validate route parameters
 
 2. Data Validation:
    - Validate API responses
    - Handle missing data gracefully
    - Provide default values
    - Type check responses
+   - Validate route parameters
+   - Handle async parameter resolution
 
 3. Performance Monitoring:
    - Track API response times
    - Monitor error rates
    - Implement circuit breakers
    - Cache frequently accessed data
+   - Monitor parameter resolution times
+   - Track parameter validation failures
 
 ## Testing & Quality
 - Add error handling for all operations
 - Implement loading states
 - Test edge cases
 - Follow accessibility guidelines
+- Test parameter resolution
+- Validate parameter types
+- Test error scenarios
 
 ## Overall
 - We are recreating the Cloudflare R2 Dashboard
 - We are using Next.js 15.2
 - We are using TailwindCSS
 - Dark mode only interface
+- Always await dynamic route parameters

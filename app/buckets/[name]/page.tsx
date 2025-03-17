@@ -3,9 +3,10 @@
 import { useState, useRef, useEffect } from 'react';
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { FaTrash, FaDownload, FaEye, FaSearch, FaSpinner, FaArrowLeft } from 'react-icons/fa';
+import { FaTrash, FaDownload, FaEye, FaSearch, FaSpinner, FaArrowLeft, FaFile, FaFileImage, FaFileAlt, FaFilePdf } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
+import Image from 'next/image';
 
 interface BucketObject {
   key: string;
@@ -31,11 +32,79 @@ const formatFileSize = (bytes: number): string => {
   return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
 };
 
+// Add file type checking utilities
+const isImageFile = (key: string): boolean => {
+  const ext = key.toLowerCase().split('.').pop();
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(ext || '');
+};
+
+const isTextFile = (key: string): boolean => {
+  const ext = key.toLowerCase().split('.').pop();
+  return ['txt', 'md', 'json', 'js', 'ts', 'html', 'css', 'yaml', 'yml'].includes(ext || '');
+};
+
+const isPDFFile = (key: string): boolean => {
+  return key.toLowerCase().endsWith('.pdf');
+};
+
+const getFileIcon = (key: string) => {
+  if (isImageFile(key)) return <FaFileImage className="text-blue-400" />;
+  if (isTextFile(key)) return <FaFileAlt className="text-green-400" />;
+  if (isPDFFile(key)) return <FaFilePdf className="text-red-400" />;
+  return <FaFile className="text-gray-400" />;
+};
+
+// Add Preview component
+const FilePreview = ({ object, bucketName }: { object: BucketObject; bucketName: string }) => {
+  if (!object.key) return null;
+
+  const previewUrl = `/api/buckets/${encodeURIComponent(bucketName)}/objects/${encodeURIComponent(object.key)}`;
+  
+  if (isImageFile(object.key)) {
+    return (
+      <div className="absolute z-50 -mt-40 ml-8 bg-[#0D1117] border border-[rgba(240,246,252,0.1)] rounded-lg shadow-lg p-2 w-64">
+        <Image
+          src={previewUrl}
+          alt={object.key}
+          width={240}
+          height={240}
+          className="rounded object-contain max-h-48 w-full"
+          style={{ objectFit: 'contain' }}
+        />
+      </div>
+    );
+  }
+
+  if (isTextFile(object.key)) {
+    return (
+      <div className="absolute z-50 -mt-40 ml-8 bg-[#0D1117] border border-[rgba(240,246,252,0.1)] rounded-lg shadow-lg p-4 w-96">
+        <div className="text-xs font-mono text-gray-300 max-h-48 overflow-auto">
+          Loading preview...
+        </div>
+      </div>
+    );
+  }
+
+  if (isPDFFile(object.key)) {
+    return (
+      <div className="absolute z-50 -mt-40 ml-8 bg-[#0D1117] border border-[rgba(240,246,252,0.1)] rounded-lg shadow-lg p-4">
+        <div className="text-sm text-gray-300">
+          PDF Preview Available
+          <br />
+          Click to open
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+};
+
 export default function BucketView() {
   const { name } = useParams<{ name: string }>();
   const [searchQuery, setSearchQuery] = useState('');
-  const [previewObject, setPreviewObject] = useState<BucketObject | null>(null);
   const [selectedObjects, setSelectedObjects] = useState<Set<string>>(new Set());
+  const [hoveredObject, setHoveredObject] = useState<BucketObject | null>(null);
   const observerTarget = useRef<HTMLDivElement>(null);
 
   const {
@@ -78,10 +147,6 @@ export default function BucketView() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  const handlePreview = (object: BucketObject) => {
-    setPreviewObject(object);
-  };
-
   const handleDelete = async () => {
     if (!selectedObjects.size) return;
     
@@ -105,16 +170,6 @@ export default function BucketView() {
       console.error('Failed to delete objects:', error);
       alert('Failed to delete some objects');
     }
-  };
-
-  const toggleObjectSelection = (key: string) => {
-    const newSelection = new Set(selectedObjects);
-    if (newSelection.has(key)) {
-      newSelection.delete(key);
-    } else {
-      newSelection.add(key);
-    }
-    setSelectedObjects(newSelection);
   };
 
   const allObjects = data?.pages.flatMap((page) => page.objects) ?? [];
@@ -163,69 +218,86 @@ export default function BucketView() {
         </div>
 
         {/* Objects List */}
-        <div className="bg-[#0D1117] border border-[rgba(240,246,252,0.1)] rounded-md shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-[#21262D] border-b border-[rgba(240,246,252,0.1)]">
-                  <th className="w-8 px-6 py-3">
-                    <input
-                      type="checkbox"
-                      className="rounded border-gray-600 text-[#EF6351] focus:ring-[#EF6351]/40"
-                      checked={selectedObjects.size === allObjects.length && allObjects.length > 0}
-                      onChange={() => {
-                        if (selectedObjects.size === allObjects.length) {
-                          setSelectedObjects(new Set());
-                        } else {
-                          setSelectedObjects(new Set(allObjects.map(obj => obj.key)));
-                        }
-                      }}
-                    />
-                  </th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Size</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Last Modified</th>
-                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
+        <div className="bg-[#0D1117] rounded-lg border border-[rgba(240,246,252,0.1)] overflow-hidden">
+          <table className="min-w-full divide-y divide-[rgba(240,246,252,0.1)]">
+            <thead className="bg-[#161B22]">
+              <tr>
+                <th className="w-8 px-6 py-3">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-600 text-[#EF6351] focus:ring-[#EF6351]/40"
+                    checked={selectedObjects.size === allObjects.length && allObjects.length > 0}
+                    onChange={(e) => {
+                      if (selectedObjects.size === allObjects.length) {
+                        setSelectedObjects(new Set());
+                      } else {
+                        setSelectedObjects(new Set(allObjects.map(obj => obj.key)));
+                      }
+                    }}
+                  />
+                </th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Size</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Last Modified</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[rgba(240,246,252,0.1)]">
+              {isLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                    <FaSpinner className="animate-spin mx-auto" />
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-[rgba(240,246,252,0.1)]">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                      <FaSpinner className="animate-spin mx-auto" />
-                    </td>
-                  </tr>
-                ) : isError ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-red-500">
-                      Failed to load objects
-                    </td>
-                  </tr>
-                ) : allObjects.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                      No objects found
-                    </td>
-                  </tr>
-                ) : (
-                  allObjects.map((object) => (
-                    <motion.tr
+              ) : isError ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-red-500">
+                    Failed to load objects
+                  </td>
+                </tr>
+              ) : allObjects.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                    No objects found
+                  </td>
+                </tr>
+              ) : (
+                data?.pages.map((page) =>
+                  page.objects.map((object) => (
+                    <tr
                       key={object.key}
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="hover:bg-[#30363D] transition-colors duration-200 group"
+                      className="hover:bg-[#161B22] transition-colors relative"
                     >
                       <td className="px-6 py-4">
                         <input
                           type="checkbox"
-                          className="rounded border-gray-600 text-[#EF6351] focus:ring-[#EF6351]/40"
                           checked={selectedObjects.has(object.key)}
-                          onChange={() => toggleObjectSelection(object.key)}
+                          onChange={(e) => {
+                            const newSelected = new Set(selectedObjects);
+                            if (e.target.checked) {
+                              newSelected.add(object.key);
+                            } else {
+                              newSelected.delete(object.key);
+                            }
+                            setSelectedObjects(newSelected);
+                          }}
+                          className="rounded bg-[#21262D] border-[rgba(240,246,252,0.1)] text-[#2F81F7] focus:ring-[#2F81F7] focus:ring-offset-[#0D1117]"
                         />
                       </td>
-                      <td className="px-6 py-4 text-sm font-medium text-[#EF6351]">
-                        {object.key}
+                      <td 
+                        className="px-6 py-4 text-sm relative group"
+                        onMouseEnter={() => setHoveredObject(object)}
+                        onMouseLeave={() => setHoveredObject(null)}
+                      >
+                        <div className="flex items-center space-x-2">
+                          {getFileIcon(object.key)}
+                          <span className="text-[#2F81F7] hover:underline">
+                            {object.key}
+                          </span>
+                        </div>
+                        {hoveredObject?.key === object.key && (
+                          <FilePreview object={object} bucketName={name} />
+                        )}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-400">
                         {formatFileSize(object.size)}
@@ -233,31 +305,30 @@ export default function BucketView() {
                       <td className="px-6 py-4 text-sm text-gray-400">
                         {new Date(object.lastModified).toLocaleString()}
                       </td>
-                      <td className="px-6 py-4 text-sm">
-                        <div className="flex items-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                      <td className="px-6 py-4 text-sm text-right space-x-2">
+                        <button
+                          onClick={() => window.open(`/api/buckets/${encodeURIComponent(name)}/objects/${encodeURIComponent(object.key)}`, '_blank')}
+                          className="text-gray-400 hover:text-gray-300"
+                          title="Download file"
+                        >
+                          <FaDownload />
+                        </button>
+                        {(isImageFile(object.key) || isTextFile(object.key) || isPDFFile(object.key)) && (
                           <button
-                            onClick={() => handlePreview(object)}
-                            className="text-gray-400 hover:text-[#EF6351] transition-colors duration-200"
-                            title="Preview"
+                            onClick={() => window.open(`/api/buckets/${encodeURIComponent(name)}/objects/${encodeURIComponent(object.key)}`, '_blank')}
+                            className="text-gray-400 hover:text-gray-300"
+                            title="View file"
                           >
                             <FaEye />
                           </button>
-                          <a
-                            href={`/api/buckets/${name}/objects/${encodeURIComponent(object.key)}`}
-                            download
-                            className="text-gray-400 hover:text-[#EF6351] transition-colors duration-200"
-                            title="Download"
-                          >
-                            <FaDownload />
-                          </a>
-                        </div>
+                        )}
                       </td>
-                    </motion.tr>
+                    </tr>
                   ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                )
+              )}
+            </tbody>
+          </table>
         </div>
 
         {/* Infinite Scroll Observer */}
@@ -266,46 +337,6 @@ export default function BucketView() {
             <FaSpinner className="animate-spin text-gray-500" />
           )}
         </div>
-
-        {/* Preview Modal */}
-        <AnimatePresence>
-          {previewObject && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center p-4 z-50"
-              onClick={() => setPreviewObject(null)}
-            >
-              <motion.div
-                initial={{ scale: 0.95 }}
-                animate={{ scale: 1 }}
-                exit={{ scale: 0.95 }}
-                className="bg-[#0D1117] rounded-lg shadow-xl max-w-2xl w-full overflow-hidden"
-                onClick={(e: React.MouseEvent) => e.stopPropagation()}
-              >
-                <div className="p-4 border-b border-[rgba(240,246,252,0.1)]">
-                  <h3 className="text-lg font-medium text-gray-200">{previewObject.key}</h3>
-                </div>
-                <div className="p-4">
-                  {previewObject.contentType?.startsWith('image/') ? (
-                    <img
-                      src={`/api/buckets/${name}/objects/${encodeURIComponent(previewObject.key)}`}
-                      alt={previewObject.key}
-                      className="max-w-full h-auto"
-                    />
-                  ) : (
-                    <div className="bg-[#21262D] p-4 rounded-md">
-                      <pre className="text-sm text-gray-300 overflow-auto">
-                        {JSON.stringify(previewObject, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   );
