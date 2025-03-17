@@ -1,103 +1,186 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from 'react';
+import { FaSearch, FaSync, FaUpload, FaInfoCircle } from 'react-icons/fa';
+import { useQuery } from '@tanstack/react-query';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useDebounce } from '@/hooks/useDebounce';
+import { parseSize, formatSize } from '@/utils/size';
+
+import type { Bucket } from '@/types/bucket';
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [searchPrefix, setSearchPrefix] = useState(searchParams.get('query') || '');
+  const debouncedSearch = useDebounce(searchPrefix, 300);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const { data, isLoading, refetch } = useQuery<Bucket[]>({
+    queryKey: ['buckets', debouncedSearch],
+    queryFn: async () => {
+      const response = await fetch(`/api/buckets${debouncedSearch ? `?query=${debouncedSearch}` : ''}`);
+      if (!response.ok) throw new Error('Failed to fetch buckets');
+      return response.json();
+    },
+  });
+
+  // Update URL when search changes
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    if (debouncedSearch) {
+      params.set('query', debouncedSearch);
+    } else {
+      params.delete('query');
+    }
+    router.replace(`?${params.toString()}`);
+  }, [debouncedSearch, router, searchParams]);
+
+  // Stats summary
+  const totalStorageBytes = data?.reduce((acc, bucket) => acc + parseSize(bucket.bucketSize || '0 B'), 0) || 0;
+  const totalClassA = data?.reduce((acc, bucket) => acc + bucket.classAOperations, 0) || 0;
+  const totalClassB = data?.reduce((acc, bucket) => acc + bucket.classBOperations, 0) || 0;
+
+  return (
+    <main className="min-h-screen bg-[#0D1117] text-gray-300">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Stats Overview */}
+        <div className="grid grid-cols-3 gap-4 mb-6">
+          <div className="bg-[#21262D] p-4 rounded-md border border-[rgba(240,246,252,0.1)]">
+            <div className="text-sm text-gray-400">Total Storage</div>
+            <div className="text-xl font-semibold text-white">{formatSize(totalStorageBytes)}</div>
+          </div>
+          <div className="bg-[#21262D] p-4 rounded-md border border-[rgba(240,246,252,0.1)]">
+            <div className="flex items-center space-x-1">
+              <div className="text-sm text-gray-400">Operations A</div>
+              <div className="group relative">
+                <FaInfoCircle className="text-gray-500 text-xs cursor-help" />
+                <div className="hidden group-hover:block absolute z-10 w-72 p-2 text-xs bg-[#0D1117] border border-[rgba(240,246,252,0.1)] rounded-md shadow-lg -right-2 top-6">
+                  Class A operations are write operations (PUT, POST, DELETE).
+                  <br />
+                  Pricing: $4.50 per million requests after free tier (1M requests/month).
+                </div>
+              </div>
+            </div>
+            <div className="text-xl font-semibold text-white">{totalClassA}</div>
+          </div>
+          <div className="bg-[#21262D] p-4 rounded-md border border-[rgba(240,246,252,0.1)]">
+            <div className="flex items-center space-x-1">
+              <div className="text-sm text-gray-400">Operations B</div>
+              <div className="group relative">
+                <FaInfoCircle className="text-gray-500 text-xs cursor-help" />
+                <div className="hidden group-hover:block absolute z-10 w-72 p-2 text-xs bg-[#0D1117] border border-[rgba(240,246,252,0.1)] rounded-md shadow-lg -right-2 top-6">
+                  Class B operations are read operations (GET, HEAD).
+                  <br />
+                  Pricing: $0.36 per million requests after free tier (10M requests/month).
+                </div>
+              </div>
+            </div>
+            <div className="text-xl font-semibold text-white">{totalClassB}</div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        {/* Header */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-6">
+            <h1 className="text-2xl font-semibold text-gray-200">R2 Buckets</h1>
+            <div className="flex items-center space-x-2">
+              <button 
+                className="inline-flex items-center px-3 py-1.5 bg-[#21262D] text-gray-300 text-sm font-medium rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm hover:bg-[#30363D] focus:outline-none focus:ring-2 focus:ring-[#0D1117]/40 active:bg-[#282E33] active:shadow-inner disabled:opacity-60 transition-colors duration-200"
+              >
+                <span className="text-[#EF6351]">{"{ }"}</span>
+                <span className="ml-1">API</span>
+              </button>
+              <button 
+                className="inline-flex items-center px-4 py-2 bg-[#EF6351] text-white text-sm font-semibold rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm hover:bg-[#F38375] focus:outline-none focus:ring-2 focus:ring-[#EF6351]/40 active:bg-[#F38375] active:shadow-inner disabled:opacity-60 transition-colors duration-200"
+              >
+                <FaUpload className="mr-2" />
+                Create bucket
+              </button>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <div className="flex-1">
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Search buckets by name"
+                  className="w-full px-4 py-2 pl-10 bg-[#0D1117] text-gray-300 border border-[rgba(240,246,252,0.1)] rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#EF6351]/40 transition-shadow duration-200 placeholder-gray-500"
+                  value={searchPrefix}
+                  onChange={(e) => setSearchPrefix(e.target.value)}
+                />
+                <FaSearch className="absolute left-3 top-3 text-gray-500" />
+              </div>
+            </div>
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center px-4 py-2 bg-[#21262D] text-gray-300 text-sm font-medium rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm hover:bg-[#30363D] focus:outline-none focus:ring-2 focus:ring-[#0D1117]/40 active:bg-[#282E33] active:shadow-inner disabled:opacity-60 transition-colors duration-200"
+            >
+              <FaSync className="mr-2" />
+              Refresh
+            </button>
+          </div>
+        </div>
+
+        {/* Buckets Table */}
+        <div className="bg-[#0D1117] border border-[rgba(240,246,252,0.1)] rounded-md shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="bg-[#21262D] border-b border-[rgba(240,246,252,0.1)]">
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Name</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Public URL Access</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Domains</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Bucket Size</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Class A Operations</th>
+                  <th className="text-left px-6 py-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Class B Operations</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[rgba(240,246,252,0.1)]">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                      Loading buckets...
+                    </td>
+                  </tr>
+                ) : data?.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
+                      No buckets found
+                    </td>
+                  </tr>
+                ) : (
+                  data?.map((bucket) => (
+                    <tr
+                      key={bucket.name}
+                      className="hover:bg-[#30363D] transition-colors duration-200"
+                    >
+                      <td className="px-6 py-4 text-sm">
+                        <a href={`/buckets/${bucket.name}`} className="text-[#EF6351] hover:text-[#F38375] font-medium">
+                          {bucket.name}
+                        </a>
+                      </td>
+                      <td className="px-6 py-4 text-sm">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          bucket.publicUrlAccess
+                            ? 'bg-[#238636] bg-opacity-20 text-[#7CE38B]'
+                            : 'bg-[#6E7681] bg-opacity-20 text-[#7D8590]'
+                        }`}>
+                          {bucket.publicUrlAccess ? 'Allowed' : 'Not Allowed'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-400">{bucket.domains.join(', ') || '-'}</td>
+                      <td className="px-6 py-4 text-sm text-gray-400">{bucket.bucketSize}</td>
+                      <td className="px-6 py-4 text-sm text-gray-400">{bucket.classAOperations}</td>
+                      <td className="px-6 py-4 text-sm text-gray-400">{bucket.classBOperations}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
   );
 }

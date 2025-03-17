@@ -1,0 +1,151 @@
+BEFORE EVERY RESPONSE, CHECK THE PLAN.MD FILE FOR THE IMPLEMENTATION GUIDELINES & REPEAT: "R2D2 Active".
+
+# R2D2 Implementation Guidelines
+
+# Make sure to follow the plan.md file for the implementation guidelines, if you add a feature, make sure to update the plan.md file TODO list.
+
+## Styling
+- Use TailwindCSS for all styling
+- Use React Icons (react-icons/fa) for icons
+- Follow color palette:
+  Tomato: #EF6351 (primary actions)
+  Salmon: #F38375 (secondary/hover)
+  Eerie Black: #1D1D1D (main text/dark bg)
+  Jet: #312D2D (secondary UI)
+  Misty Rose: #FFECEA (light bg)
+
+## Component Styling (GitHub Dark Mode)
+- Primary Button:
+  - Base: bg-[#EF6351] text-white
+  - Border: border border-[rgba(240,246,252,0.1)]
+  - Shadow: shadow-sm
+  - Hover: bg-[#F38375]
+  - Focus: ring-2 ring-[#EF6351]/40
+  - Active: bg-[#F38375] shadow-inner
+  - Disabled: opacity-60
+
+- Secondary Button:
+  - Base: bg-[#21262D] text-gray-300
+  - Border: border border-[rgba(240,246,252,0.1)]
+  - Shadow: shadow-sm
+  - Hover: bg-[#30363D]
+  - Focus: ring-2 ring-[#0D1117]/40
+  - Active: bg-[#282E33] shadow-inner
+  - Disabled: opacity-60
+
+- Input Fields:
+  - Base: bg-[#0D1117] text-gray-300 border border-[rgba(240,246,252,0.1)]
+  - Focus: ring-2 ring-[#EF6351]/40 border-[rgba(240,246,252,0.1)]
+  - Shadow: shadow-sm
+  - Disabled: bg-[#21262D]
+  - Placeholder: text-gray-500
+
+- Cards/Containers:
+  - Base: bg-[#0D1117] border border-[rgba(240,246,252,0.1)]
+  - Shadow: shadow-sm
+  - Rounded: rounded-md
+
+- Table:
+  - Header: bg-[#21262D] text-gray-400
+  - Row Border: border-[rgba(240,246,252,0.1)]
+  - Row Hover: bg-[#30363D]
+  - Text: text-gray-300
+  - Links: text-[#EF6351] hover:text-[#F38375]
+
+## Performance
+- Default to Server Components
+- Use Client Components only for interactivity
+- Implement streaming for large datasets
+- Use React Query for data fetching/caching
+- Add loading states and suspense boundaries
+
+## TypeScript
+- Use strict TypeScript
+- Implement proper type definitions
+- No any types unless absolutely necessary
+
+## Component Structure
+- Keep components focused and single-responsibility
+- Implement proper error boundaries
+- Add loading states for async operations
+- Use proper Next.js 15.2 patterns
+
+## API Integration
+- Handle all errors gracefully
+- Implement optimistic updates
+- Use proper TypeScript types for API responses
+- Cache appropriately with React Query
+
+### Metrics Collection Strategy
+1. Short-term (Current Implementation):
+   - Use S3 API for basic metrics
+   - Calculate size from object listings
+   - Approximate operations from object counts
+   - Handle errors gracefully with fallbacks
+
+2. Medium-term (Workers Integration):
+   - Deploy dedicated metrics Worker
+   - Track operations in real-time
+   - Store historical data in KV/D1
+   - Implement proper operation counting
+
+3. Long-term (Full Analytics):
+   - Add bandwidth tracking
+   - Implement cost analysis
+   - Add usage predictions
+   - Support custom date ranges
+
+### API Response Types
+```typescript
+interface BucketResponse {
+  name: string;
+  publicUrlAccess: boolean;
+  domains: string[];
+  bucketSize: string;
+  classAOperations: number;
+  classBOperations: number;
+  createdAt: Date;
+}
+
+interface BucketMetrics {
+  operations: {
+    classA: Record<string, number>;
+    classB: Record<string, number>;
+  };
+  storage: {
+    size: number;
+    objects: number;
+  };
+}
+```
+
+### Error Handling Strategy
+1. API Errors:
+   - Log detailed error information
+   - Provide fallback values
+   - Show user-friendly messages
+   - Implement retry logic
+
+2. Data Validation:
+   - Validate API responses
+   - Handle missing data gracefully
+   - Provide default values
+   - Type check responses
+
+3. Performance Monitoring:
+   - Track API response times
+   - Monitor error rates
+   - Implement circuit breakers
+   - Cache frequently accessed data
+
+## Testing & Quality
+- Add error handling for all operations
+- Implement loading states
+- Test edge cases
+- Follow accessibility guidelines
+
+## Overall
+- We are recreating the Cloudflare R2 Dashboard
+- We are using Next.js 15.2
+- We are using TailwindCSS
+- Dark mode only interface
