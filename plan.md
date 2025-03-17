@@ -34,11 +34,11 @@ Building a modern, feature-rich R2 control panel using Next.js 15.2 and Cloudfla
 ## Core Features
 
 ### 1. Bucket & Object Management
-- List buckets with infinite scroll
-- Object browsing with infinite scroll
-- Delete operations (single and bulk delete)
-- Upload functionality with progress tracking
-- Folder-like navigation using prefixes
+- [x] List buckets with infinite scroll
+- [x] Object browsing with infinite scroll
+- [x] Delete operations (single and bulk delete)
+- [x] Upload functionality with progress tracking
+- [x] Folder-like navigation using prefixes
 
 ### 2. Enhanced Querying
 - Implement advanced search functionality
@@ -69,10 +69,34 @@ Building a modern, feature-rich R2 control panel using Next.js 15.2 and Cloudfla
 - Smooth transitions using Framer Motion
 - Loading skeletons for better loading states
 - Toast notifications for operations
-- Drag and drop upload zone
+- [x] Drag and drop upload zone
 - Context menu for quick actions
 - Breadcrumb navigation
 - Grid/List view toggle
+
+### 3. Bucket & Permissions Management
+1. Display bucket metadata:
+   - Creation date
+   - Storage usage
+   - Operation counts (Class A and B)
+   - Public access status
+
+2. Public Access Controls:
+   - Toggle public access on/off
+   - Display public URL when enabled
+   - Security warnings for public buckets
+
+3. CORS Configuration:
+   - Add/Edit CORS rules
+   - Display existing CORS configuration
+   - Validate CORS syntax
+
+4. Lifecycle Rules:
+   - Configure expiration policies
+   - Implement transition rules
+   - Schedule-based cleanup
+
+5. [x] Implement bucket creation flow
 
 ## Next.js 15.2 Performance Optimizations
 
@@ -267,7 +291,7 @@ interface R2Object {
   - [x] List buckets
   - [x] View bucket details
   - [x] Fetch bucket domains (public & Workers)
-  - [ ] Create bucket
+  - [x] Create bucket
   - [x] Delete bucket
 
 ### API Response Types

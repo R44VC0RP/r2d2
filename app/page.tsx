@@ -6,6 +6,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useDebounce } from '@/hooks/useDebounce';
 import { parseSize, formatSize } from '@/utils/size';
+import CreateBucketModal from './components/CreateBucketModal';
+import { motion } from 'framer-motion';
 
 import type { Bucket } from '@/types/bucket';
 
@@ -14,6 +16,7 @@ export default function Home() {
   const searchParams = useSearchParams();
   const [searchPrefix, setSearchPrefix] = useState(searchParams.get('query') || '');
   const debouncedSearch = useDebounce(searchPrefix, 300);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const { data, isLoading, refetch } = useQuery<Bucket[]>({
     queryKey: ['buckets', debouncedSearch],
@@ -108,19 +111,16 @@ export default function Home() {
         <div className="mb-6">
           <div className="flex items-center justify-between mb-6">
             <h1 className="text-2xl font-semibold text-gray-200">R2 Buckets</h1>
-            <div className="flex items-center space-x-2">
-              <button 
-                className="inline-flex items-center px-3 py-1.5 bg-[#21262D] text-gray-300 text-sm font-medium rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm hover:bg-[#30363D] focus:outline-none focus:ring-2 focus:ring-[#0D1117]/40 active:bg-[#282E33] active:shadow-inner disabled:opacity-60 transition-colors duration-200"
-              >
-                <span className="text-[#EF6351]">{"{ }"}</span>
-                <span className="ml-1">API</span>
-              </button>
-              <button 
-                className="inline-flex items-center px-4 py-2 bg-[#EF6351] text-white text-sm font-semibold rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm hover:bg-[#F38375] focus:outline-none focus:ring-2 focus:ring-[#EF6351]/40 active:bg-[#F38375] active:shadow-inner disabled:opacity-60 transition-colors duration-200"
+            <div className="flex items-center space-x-2">          
+              <motion.button 
+                onClick={() => setIsCreateModalOpen(true)}
+                whileHover={{ backgroundColor: '#F38375' }}
+                whileTap={{ scale: 0.97 }}
+                className="inline-flex items-center px-4 py-2 bg-[#EF6351] text-white text-sm font-semibold rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#EF6351]/40 active:bg-[#F38375] active:shadow-inner disabled:opacity-60 transition-colors duration-200"
               >
                 <FaUpload className="mr-2" />
                 Create bucket
-              </button>
+              </motion.button>
             </div>
           </div>
           
@@ -206,6 +206,12 @@ export default function Home() {
           </div>
         </div>
       </div>
+      
+      {/* Create Bucket Modal */}
+      <CreateBucketModal 
+        isOpen={isCreateModalOpen} 
+        onClose={() => setIsCreateModalOpen(false)} 
+      />
     </main>
   );
 }

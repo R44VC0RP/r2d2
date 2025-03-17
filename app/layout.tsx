@@ -64,19 +64,21 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${overusedGrotesk.variable}`}>
       <head>
-        <script
+        {/* <script
           crossOrigin="anonymous"
           src="//unpkg.com/react-scan/dist/auto.global.js"
-        />
+        /> */}
       </head>
       <body className={overusedGrotesk.className}>
         <header className="bg-[#21262D] border-b border-[rgba(240,246,252,0.1)]">
           <div className="max-w-7xl mx-auto px-4 py-3">
-            <div className="flex items-center">
+            <div className="flex items-center justify-between">
               <div className="text-[#EF6351] font-semibold text-lg">Cloudflare R2D2</div>
-              <span className="text-gray-400 mx-2">designed by</span>
-              <Image src="/exon.png" alt="exon" width={20} height={20} />
-              <div className="text-gray-300 ml-2">exon</div>
+              <div className="flex items-center">
+                <span className="text-gray-400 mx-2">designed by</span>
+                <Image src="/exon.png" alt="exon" width={20} height={20} />
+                <div className="text-gray-300 ml-2">exon</div>
+              </div>
             </div>
           </div>
         </header>

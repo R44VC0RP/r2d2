@@ -194,4 +194,92 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const { name, publicAccess = false } = await request.json();
+    
+    if (!name) {
+      return NextResponse.json(
+        { error: 'Bucket name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Validate bucket name
+    const bucketNameRegex = /^[a-z0-9.-]{3,63}$/;
+    if (!bucketNameRegex.test(name)) {
+      return NextResponse.json(
+        { error: 'Bucket name must be 3-63 characters long and can only contain lowercase letters, numbers, hyphens, and periods' },
+        { status: 400 }
+      );
+    }
+
+    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+
+    // Create bucket using Cloudflare API
+    const response = await fetch(
+      `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Error creating bucket:', errorText);
+      return NextResponse.json(
+        { error: 'Failed to create bucket' },
+        { status: response.status }
+      );
+    }
+
+    // If public access is enabled, set the bucket to be publicly accessible
+    if (publicAccess) {
+      const publicAccessResponse = await fetch(
+        `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${name}/public_access`,
+        {
+          method: 'PUT',
+          headers: {
+            'Authorization': `Bearer ${apiToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            enabled: true,
+          }),
+        }
+      );
+
+      if (!publicAccessResponse.ok) {
+        console.warn(`Failed to set public access for bucket ${name}`);
+      }
+    }
+
+    // Get the created bucket details for response
+    const details = await getBucketDetails(name);
+    const domains = await getBucketDomains(name);
+
+    return NextResponse.json({
+      name,
+      publicUrlAccess: publicAccess,
+      domains,
+      bucketSize: details.size ? `${(details.size / (1024 * 1024 * 1024)).toFixed(2)} GB` : '0 B',
+      classAOperations: details.operations.class_a,
+      classBOperations: details.operations.class_b,
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error creating bucket:', error);
+    return NextResponse.json(
+      { error: 'Failed to create bucket' },
+      { status: 500 }
+    );
+  }
 } 

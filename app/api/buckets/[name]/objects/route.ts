@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { S3Client, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, ListObjectsV2Command, DeleteObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const endpoint = process.env.CLOUDFLARE_R2_ENDPOINT;
 
@@ -113,7 +113,7 @@ export async function GET(
 
     // Add cache headers for better performance
     const headers = new Headers({
-      'Cache-Control': 'public, max-age=60, stale-while-revalidate=30',
+      'Cache-Control': 'no-cache',
     });
 
     return NextResponse.json({
@@ -163,6 +163,73 @@ export async function DELETE(
     console.error('Error deleting object:', error);
     return NextResponse.json(
       { error: 'Failed to delete object' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function POST(
+  request: NextRequest,
+  context: Context
+) {
+  try {
+    const { name: bucketName } = await context.params;
+    const { searchParams } = new URL(request.url);
+    const path = searchParams.get('path') || '';
+    
+    if (!bucketName) {
+      return NextResponse.json(
+        { error: 'Bucket name is required' },
+        { status: 400 }
+      );
+    }
+
+    // Check if the request is multipart/form-data
+    const contentType = request.headers.get('content-type') || '';
+    
+    if (!contentType.includes('multipart/form-data')) {
+      return NextResponse.json(
+        { error: 'Content-Type must be multipart/form-data' },
+        { status: 400 }
+      );
+    }
+
+    // Parse the form data
+    const formData = await request.formData();
+    const file = formData.get('file') as File;
+    
+    if (!file) {
+      return NextResponse.json(
+        { error: 'No file provided' },
+        { status: 400 }
+      );
+    }
+
+    // Get file buffer and metadata
+    const buffer = await file.arrayBuffer();
+    const key = path || file.name;
+    const fileType = file.type || 'application/octet-stream';
+    
+    // Upload to S3
+    const command = new PutObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+      Body: Buffer.from(buffer),
+      ContentType: fileType,
+    });
+
+    await s3.send(command);
+
+    return NextResponse.json({
+      success: true,
+      key,
+      size: file.size,
+      contentType: fileType,
+    });
+  } catch (error) {
+    console.error('Error uploading file:', error);
+    return NextResponse.json(
+      { error: 'Failed to upload file' },
       { status: 500 }
     );
   }

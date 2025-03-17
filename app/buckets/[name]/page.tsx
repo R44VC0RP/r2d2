@@ -1,12 +1,13 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
 import { useParams } from 'next/navigation';
-import { FaTrash, FaDownload, FaEye, FaSearch, FaSpinner, FaArrowLeft, FaFile, FaFileImage, FaFileAlt, FaFilePdf, FaSort, FaSortUp, FaSortDown, FaFilter } from 'react-icons/fa';
+import { FaTrash, FaDownload, FaEye, FaSearch, FaSpinner, FaArrowLeft, FaFile, FaFileImage, FaFileAlt, FaFilePdf, FaSort, FaSortUp, FaSortDown, FaFilter, FaUpload, FaSyncAlt } from 'react-icons/fa';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import Image from 'next/image';
+import FileUploadModal from '../../components/FileUploadModal';
 
 interface BucketObject {
   key: string;
@@ -25,11 +26,16 @@ interface ObjectsResponse {
 const formatFileSize = (bytes: number): string => {
   if (bytes === 0) return '0 B';
   
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  // Handle negative or invalid input
+  if (bytes < 0 || isNaN(bytes)) return '0 B';
+  
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   
-  // Return formatted size with up to 2 decimal places
-  return `${(bytes / Math.pow(1024, i)).toFixed(2)} ${sizes[i]}`;
+  // Ensure the index is within valid bounds
+  const index = Math.min(i, sizes.length - 1);
+  
+  return `${(bytes / Math.pow(1024, index)).toFixed(2)} ${sizes[index]}`;
 };
 
 // Add file type checking utilities
@@ -177,8 +183,11 @@ export default function BucketView() {
   const [dateFrom, setDateFrom] = useState<string>('');
   const [dateTo, setDateTo] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const observerTarget = useRef<HTMLDivElement>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const queryClient = useQueryClient();
 
   // Add mouse position tracking
   useEffect(() => {
@@ -197,6 +206,7 @@ export default function BucketView() {
     isFetchingNextPage,
     isLoading,
     isError,
+    refetch,
   } = useInfiniteQuery<ObjectsResponse>({
     queryKey: ['bucketObjects', name, searchQuery],
     queryFn: async ({ pageParam = null }) => {
@@ -253,14 +263,25 @@ export default function BucketView() {
         searchParams.set('continuationToken', pageParam as string);
       }
 
-      const response = await fetch(`/api/buckets/${encodeURIComponent(name)}/objects?${searchParams}`);
+      // Add cache busting to prevent browser caching
+      searchParams.set('_', Date.now().toString());
+
+      const response = await fetch(`/api/buckets/${encodeURIComponent(name)}/objects?${searchParams}`, {
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
+        }
+      });
+      
       if (!response.ok) throw new Error('Failed to fetch objects');
       return response.json();
     },
     getNextPageParam: (lastPage) => lastPage.nextContinuationToken,
     initialPageParam: null,
-    gcTime: 300000, // Cache for 5 minutes (v5 uses gcTime instead of cacheTime)
-    staleTime: 60000, // Keep data fresh for 1 minute
+    gcTime: 60000, // Cache for 1 minute (reduced from 5 minutes)
+    staleTime: 0, // Always consider data stale, so it will refetch on mount
+    refetchOnWindowFocus: true, // Refetch when window regains focus
   });
 
   // Enhanced infinite scroll with early fetching
@@ -304,7 +325,109 @@ export default function BucketView() {
   };
 
   // Type-safe access to all objects
-  const allObjects = data?.pages.flatMap((page: ObjectsResponse) => page.objects) ?? [];
+  const allObjects = data?.pages?.flatMap((page: ObjectsResponse) => page?.objects || []) ?? [];
+
+  // Apply sorting to objects - with safety measures
+  const sortedObjects = [...(allObjects || [])].sort((a, b) => {
+    if (!a || !b) return 0; // Protect against undefined objects
+    
+    try {
+      if (sortBy === 'name') {
+        return sortOrder === 'asc' 
+          ? (a.key || '').localeCompare(b.key || '')
+          : (b.key || '').localeCompare(a.key || '');
+      } else if (sortBy === 'size') {
+        return sortOrder === 'asc' 
+          ? (a.size || 0) - (b.size || 0)
+          : (b.size || 0) - (a.size || 0);
+      } else if (sortBy === 'date') {
+        const dateA = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+        const dateB = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+        return sortOrder === 'asc' 
+          ? dateA - dateB
+          : dateB - dateA;
+      }
+    } catch (error) {
+      console.error('Error sorting objects:', error);
+    }
+    return 0;
+  });
+
+  // Apply additional filters from UI controls (not search query)
+  const filteredObjects = (() => {
+    // First ensure we have valid sortedObjects to work with
+    if (!Array.isArray(sortedObjects) || sortedObjects.length === 0) {
+      return [];
+    }
+    
+    try {
+      return sortedObjects.filter(obj => {
+        // Ensure we have a valid object
+        if (!obj) return false;
+        
+        // File type filter
+        if (fileType) {
+          const ext = (obj.key || '').toLowerCase().split('.').pop() || '';
+          const typeMatches = {
+            images: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'],
+            documents: ['pdf', 'doc', 'docx', 'txt', 'rtf', 'odt', 'md', 'csv'],
+            code: ['js', 'ts', 'py', 'java', 'cpp', 'html', 'css', 'json', 'yaml', 'yml'],
+            media: ['mp3', 'mp4', 'avi', 'mov', 'wav'],
+            archives: ['zip', 'rar', '7z', 'tar', 'gz']
+          };
+          if (!typeMatches[fileType as keyof typeof typeMatches]?.includes(ext)) {
+            return false;
+          }
+        }
+
+        // Size filters
+        if (minSize) {
+          const minSizeBytes = Number(minSize);
+          if (!isNaN(minSizeBytes) && (obj.size || 0) < minSizeBytes) {
+            return false;
+          }
+        }
+        if (maxSize) {
+          const maxSizeBytes = Number(maxSize);
+          if (!isNaN(maxSizeBytes) && (obj.size || 0) > maxSizeBytes) {
+            return false;
+          }
+        }
+
+        // Date filters
+        if (dateFrom) {
+          try {
+            const fromDate = new Date(dateFrom);
+            if (isValidDate(fromDate) && obj.lastModified && new Date(obj.lastModified) < fromDate) {
+              return false;
+            }
+          } catch (e) {
+            // Invalid date format, skip this filter
+          }
+        }
+        if (dateTo) {
+          try {
+            const toDate = new Date(dateTo);
+            if (isValidDate(toDate) && obj.lastModified && new Date(obj.lastModified) > toDate) {
+              return false;
+            }
+          } catch (e) {
+            // Invalid date format, skip this filter
+          }
+        }
+
+        return true;
+      });
+    } catch (error) {
+      console.error('Error filtering objects:', error);
+      return [];
+    }
+  })();
+
+  // Helper to check if date is valid
+  function isValidDate(d: Date) {
+    return d instanceof Date && !isNaN(d.getTime());
+  }
 
   const handleSort = (field: string) => {
     if (sortBy === field) {
@@ -318,6 +441,37 @@ export default function BucketView() {
   const getSortIcon = (field: string) => {
     if (sortBy !== field) return <FaSort className="text-gray-400" />;
     return sortOrder === 'asc' ? <FaSortUp className="text-blue-400" /> : <FaSortDown className="text-blue-400" />;
+  };
+
+  // Get current path from search query
+  const getCurrentPrefix = () => {
+    // Extract prefix from searchQuery if it exists and starts with /
+    if (searchQuery.startsWith('/')) {
+      // Get everything up to the last character or up to an asterisk
+      const prefixMatch = searchQuery.match(/^(\/[^*]*\/)/);
+      if (prefixMatch) {
+        return prefixMatch[1].slice(1); // Remove leading slash
+      }
+      return searchQuery.slice(1); // Remove leading slash
+    }
+    return '';
+  };
+
+  // Add hard refresh function
+  const handleHardRefresh = async () => {
+    setIsRefreshing(true);
+    
+    try {
+      // Remove data from cache completely
+      queryClient.removeQueries({ queryKey: ['bucketObjects', name, searchQuery] });
+      
+      // Fetch fresh data - in v5 we need to use refetchOptions differently
+      await refetch();
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+    } finally {
+      setIsRefreshing(false);
+    }
   };
 
   return (
@@ -349,6 +503,19 @@ export default function BucketView() {
               </button>
             )}
           </div>
+          
+          {/* Add Upload Button */}
+          {selectedObjects.size === 0 && (
+            <motion.button
+              onClick={() => setIsUploadModalOpen(true)}
+              whileHover={{ backgroundColor: '#F38375' }}
+              whileTap={{ scale: 0.97 }}
+              className="inline-flex items-center px-4 py-2 bg-[#EF6351] text-white text-sm font-semibold rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#EF6351]/40 active:bg-[#F38375] active:shadow-inner disabled:opacity-60 transition-colors duration-200"
+            >
+              <FaUpload className="mr-2" />
+              Upload Files
+            </motion.button>
+          )}
         </div>
 
         {/* Search and Filter Controls with enhanced animations */}
@@ -393,11 +560,18 @@ export default function BucketView() {
             </div>
             <motion.button
               onClick={() => setShowFilters(!showFilters)}
-              className="px-4 py-2 bg-[#21262D] text-gray-300 rounded-md border border-[rgba(240,246,252,0.1)] hover:bg-[#30363D] focus:ring-2 focus:ring-[#2F81F7]/40"
+              className="px-4 py-2 bg-[#21262D] text-gray-300 rounded-md border border-[rgba(240,246,252,0.1)] hover:bg-[#30363D] focus:ring-2 focus:ring-[#2F81F7]/40 relative"
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
             >
-              <FaFilter className={showFilters ? "text-blue-400" : "text-gray-400"} />
+              <FaFilter className={showFilters || (fileType || minSize || maxSize || dateFrom || dateTo) ? "text-blue-400" : "text-gray-400"} />
+              
+              {/* Show filter counter badge */}
+              {(fileType || minSize || maxSize || dateFrom || dateTo) && (
+                <span className="absolute -top-2 -right-2 bg-blue-500 text-xs text-white font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                  {[fileType, minSize, maxSize, dateFrom, dateTo].filter(Boolean).length}
+                </span>
+              )}
             </motion.button>
           </motion.div>
 
@@ -437,7 +611,14 @@ export default function BucketView() {
                     <label className="block text-sm font-medium mb-2">File Type</label>
                     <select
                       value={fileType}
-                      onChange={(e) => setFileType(e.target.value)}
+                      onChange={(e) => {
+                        setFileType(e.target.value);
+                        // Apply filters immediately
+                        if (e.target.value !== fileType) {
+                          // Reset selected objects when filters change
+                          setSelectedObjects(new Set());
+                        }
+                      }}
                       className="w-full bg-[#21262D] text-gray-300 rounded-md border border-[rgba(240,246,252,0.1)] px-3 py-2"
                     >
                       <option value="">All Types</option>
@@ -460,14 +641,26 @@ export default function BucketView() {
                         type="number"
                         placeholder="Min"
                         value={minSize}
-                        onChange={(e) => setMinSize(e.target.value)}
+                        onChange={(e) => {
+                          setMinSize(e.target.value);
+                          // Reset selected objects when filters change
+                          if (e.target.value !== minSize) {
+                            setSelectedObjects(new Set());
+                          }
+                        }}
                         className="w-1/2 bg-[#21262D] text-gray-300 rounded-md border border-[rgba(240,246,252,0.1)] px-3 py-2"
                       />
                       <input
                         type="number"
                         placeholder="Max"
                         value={maxSize}
-                        onChange={(e) => setMaxSize(e.target.value)}
+                        onChange={(e) => {
+                          setMaxSize(e.target.value);
+                          // Reset selected objects when filters change
+                          if (e.target.value !== maxSize) {
+                            setSelectedObjects(new Set());
+                          }
+                        }}
                         className="w-1/2 bg-[#21262D] text-gray-300 rounded-md border border-[rgba(240,246,252,0.1)] px-3 py-2"
                       />
                     </div>
@@ -483,18 +676,64 @@ export default function BucketView() {
                       <input
                         type="date"
                         value={dateFrom}
-                        onChange={(e) => setDateFrom(e.target.value)}
+                        onChange={(e) => {
+                          setDateFrom(e.target.value);
+                          // Reset selected objects when filters change
+                          if (e.target.value !== dateFrom) {
+                            setSelectedObjects(new Set());
+                          }
+                        }}
                         className="w-1/2 bg-[#21262D] text-gray-300 rounded-md border border-[rgba(240,246,252,0.1)] px-3 py-2"
                       />
                       <input
                         type="date"
                         value={dateTo}
-                        onChange={(e) => setDateTo(e.target.value)}
+                        onChange={(e) => {
+                          setDateTo(e.target.value);
+                          // Reset selected objects when filters change
+                          if (e.target.value !== dateTo) {
+                            setSelectedObjects(new Set());
+                          }
+                        }}
                         className="w-1/2 bg-[#21262D] text-gray-300 rounded-md border border-[rgba(240,246,252,0.1)] px-3 py-2"
                       />
                     </div>
                   </motion.div>
+
+                  <motion.div
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.5 }}
+                    className="flex flex-col justify-end"
+                  >
+                    <button
+                      onClick={() => {
+                        // Reset all filters
+                        setFileType('');
+                        setMinSize('');
+                        setMaxSize('');
+                        setDateFrom('');
+                        setDateTo('');
+                        setSelectedObjects(new Set());
+                      }}
+                      className="mt-6 w-full bg-[#21262D] text-gray-300 py-2 rounded-md border border-[rgba(240,246,252,0.1)] hover:bg-[#30363D] focus:ring-2 focus:ring-[#2F81F7]/40"
+                    >
+                      Reset Filters
+                    </button>
+                  </motion.div>
                 </div>
+
+                {/* Show filter summary */}
+                {(fileType || minSize || maxSize || dateFrom || dateTo) && (
+                  <div className="mt-3 text-xs text-gray-400 flex items-center">
+                    <span className="font-medium mr-2">Active filters:</span>
+                    {fileType && <span className="mr-2 px-2 py-0.5 bg-[#21262D] rounded-full">{fileType}</span>}
+                    {minSize && <span className="mr-2 px-2 py-0.5 bg-[#21262D] rounded-full">Min: {formatFileSize(Number(minSize) || 0)}</span>}
+                    {maxSize && <span className="mr-2 px-2 py-0.5 bg-[#21262D] rounded-full">Max: {formatFileSize(Number(maxSize) || 0)}</span>}
+                    {dateFrom && <span className="mr-2 px-2 py-0.5 bg-[#21262D] rounded-full">From: {new Date(dateFrom).toLocaleDateString()}</span>}
+                    {dateTo && <span className="mr-2 px-2 py-0.5 bg-[#21262D] rounded-full">To: {new Date(dateTo).toLocaleDateString()}</span>}
+                  </div>
+                )}
               </motion.div>
             )}
           </AnimatePresence>
@@ -502,6 +741,14 @@ export default function BucketView() {
 
         {/* Objects List */}
         <div className="bg-[#0D1117] rounded-lg border border-[rgba(240,246,252,0.1)] overflow-hidden">
+          {/* Show filtering indicator if filters reduced the objects count */}
+          {Array.isArray(allObjects) && Array.isArray(filteredObjects) && 
+           allObjects.length > 0 && filteredObjects.length < allObjects.length && (
+            <div className="bg-[#161B22] px-6 py-2 text-xs text-gray-400 border-b border-[rgba(240,246,252,0.1)]">
+              Showing {filteredObjects.length} of {allObjects.length} objects ({(allObjects.length - filteredObjects.length)} filtered out)
+            </div>
+          )}
+          
           <table className="min-w-full divide-y divide-[rgba(240,246,252,0.1)]">
             <thead className="bg-[#161B22]">
               <tr>
@@ -509,10 +756,11 @@ export default function BucketView() {
                   <input
                     type="checkbox"
                     className="rounded bg-[#21262D] border-[rgba(240,246,252,0.1)] text-[#2F81F7] focus:ring-[#2F81F7] focus:ring-offset-[#0D1117]"
-                    checked={selectedObjects.size === allObjects.length}
+                    checked={Array.isArray(filteredObjects) && filteredObjects.length > 0 && 
+                            selectedObjects.size === filteredObjects.length}
                     onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedObjects(new Set(allObjects.map(obj => obj.key)));
+                      if (e.target.checked && Array.isArray(filteredObjects)) {
+                        setSelectedObjects(new Set(filteredObjects.map(obj => obj.key)));
                       } else {
                         setSelectedObjects(new Set());
                       }
@@ -564,15 +812,18 @@ export default function BucketView() {
                     Failed to load objects
                   </td>
                 </tr>
-              ) : allObjects.length === 0 ? (
+              ) : !Array.isArray(filteredObjects) || filteredObjects.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
                     No objects found
                   </td>
                 </tr>
               ) : (
-                data?.pages.map((page) =>
-                  page.objects.map((object) => (
+                filteredObjects.map((object) => {
+                  // Skip if object is invalid
+                  if (!object || !object.key) return null;
+                  
+                  return (
                     <tr
                       key={object.key}
                       className="hover:bg-[#161B22] transition-colors relative"
@@ -604,10 +855,10 @@ export default function BucketView() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-400">
-                        {formatFileSize(object.size)}
+                        {formatFileSize(object.size || 0)}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-400">
-                        {new Date(object.lastModified).toLocaleString()}
+                        {object.lastModified ? new Date(object.lastModified).toLocaleString() : 'Unknown'}
                       </td>
                       <td className="px-6 py-4 text-sm text-right space-x-2">
                         <button
@@ -628,8 +879,8 @@ export default function BucketView() {
                         )}
                       </td>
                     </tr>
-                  ))
-                )
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -658,6 +909,14 @@ export default function BucketView() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* File Upload Modal */}
+        <FileUploadModal 
+          isOpen={isUploadModalOpen}
+          onClose={() => setIsUploadModalOpen(false)}
+          bucketName={name}
+          currentPrefix={getCurrentPrefix()}
+        />
       </div>
     </div>
   );
