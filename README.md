@@ -1,6 +1,14 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+
 
 ## Getting Started
+
+Don't wanna deal with all this? We got you covered.
+
+Fully hosted version with authentication and a database (thanks Neon!)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FR44VC0RP%2Fr2d2&env=AUTH_SECRET&envDescription=You%20are%20going%20to%20need%20to%20set%20a%20random%20AUTH_SECRET%20and%20use%20Neon%20DB%20for%20the%20database%20integration.&project-name=cloudflare-r2-d2&repository-name=cloudflare-r2-d2&integration-ids=oac_3sK3gnG06emjIEVL09jjntDD)
+
+
 
 ### Environment Setup
 
