@@ -1,0 +1,18 @@
+CREATE TABLE IF NOT EXISTS "users" (
+  "id" SERIAL PRIMARY KEY,
+  "name" TEXT NOT NULL,
+  "email" TEXT NOT NULL UNIQUE,
+  "password" TEXT NOT NULL,
+  "role" TEXT NOT NULL DEFAULT 'admin',
+  "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "app_config" (
+  "id" SERIAL PRIMARY KEY,
+  "key" TEXT NOT NULL UNIQUE,
+  "value" TEXT NOT NULL,
+  "is_secret" BOOLEAN NOT NULL DEFAULT FALSE,
+  "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+  "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
+); 

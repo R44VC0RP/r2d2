@@ -1,18 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
-
-// Initialize S3 client outside request handler
-const s3 = new S3Client({
-  region: "auto",
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.CLOUDFLARE_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.CLOUDFLARE_SECRET_ACCESS_KEY || '',
-  },
-  requestChecksumCalculation: "WHEN_REQUIRED",
-  responseChecksumValidation: "WHEN_REQUIRED"
-});
+import { getR2Client } from '@/lib/r2';
 
 type Context = {
   params: Promise<{ name: string; key: string[] }>;
@@ -25,7 +14,6 @@ export async function GET(
   try {
     console.log('🚀 Starting GET request for object');
     
-    // Ensure we have the bucket name and key
     const { name: bucketName, key: keyParts } = await context.params;
     const key = keyParts.join('/');
     
@@ -40,16 +28,8 @@ export async function GET(
       );
     }
 
-    // Validate credentials
-    if (!process.env.CLOUDFLARE_ACCESS_KEY_ID || !process.env.CLOUDFLARE_SECRET_ACCESS_KEY) {
-      console.log('❌ Missing Cloudflare credentials');
-      return NextResponse.json(
-        { error: 'Cloudflare credentials not configured' },
-        { status: 500 }
-      );
-    }
-
     console.log('📡 Sending request to R2');
+    const s3 = await getR2Client();
     const command = new GetObjectCommand({
       Bucket: bucketName,
       Key: key,
@@ -58,7 +38,6 @@ export async function GET(
     const response = await s3.send(command);
     console.log('✅ R2 response received');
 
-    // Convert the readable stream to a Response
     if (response.Body instanceof Readable) {
       return new NextResponse(response.Body as any, {
         headers: {

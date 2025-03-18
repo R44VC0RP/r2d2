@@ -4,6 +4,8 @@ BEFORE EVERY RESPONSE, CHECK THE PLAN.MD FILE FOR THE IMPLEMENTATION GUIDELINES 
 
 # Make sure to follow the plan.md file for the implementation guidelines, if you add a feature, make sure to update the plan.md file TODO list.
 
+# When iterating on lints DO NOT STOP ON THE FILE UNTIL YOU HAVE FIXED ALL THE LINTING ERRORS. Use a web search to find the correct solution if you are unsure.
+
 ## Next.js 15 API Routes
 - Always await dynamic route parameters in API routes:
   ```typescript

@@ -3,6 +3,8 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "./providers";
 import Image from "next/image";
+import { auth } from "@/auth";
+import { AuthHeader } from "@/components/AuthHeader";
 // Load the OverusedGrotesk font family
 const overusedGrotesk = localFont({
   src: [
@@ -56,11 +58,13 @@ export const metadata: Metadata = {
   description: "A modern dashboard for managing Cloudflare R2 buckets",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await auth();
+
   return (
     <html lang="en" className={`${overusedGrotesk.variable}`}>
       <head>
@@ -74,10 +78,14 @@ export default function RootLayout({
           <div className="max-w-7xl mx-auto px-4 py-3">
             <div className="flex items-center justify-between">
               <div className="text-[#EF6351] font-semibold text-lg">Cloudflare R2D2</div>
-              <div className="flex items-center">
-                <span className="text-gray-400 mx-2">designed by</span>
-                <Image src="/exon.png" alt="exon" width={20} height={20} />
-                <div className="text-gray-300 ml-2">exon</div>
+              <div className="flex items-center space-x-4">
+                
+                <div className="flex items-center border-r border-[rgba(240,246,252,0.1)] pr-4">
+                  <span className="text-gray-400 mx-2">designed by</span>
+                  <Image src="/exon.png" alt="exon" width={20} height={20} />
+                  <div className="text-gray-300 ml-2">exon</div>
+                </div>
+                <AuthHeader session={session} />
               </div>
             </div>
           </div>

@@ -251,6 +251,14 @@ interface R2Object {
 3. Collect performance metrics
 4. User behavior analytics
 
+## WordPress-Style Setup & Authentication
+1. Implement database-stored configuration via Drizzle ORM
+2. Create initial setup wizard for onboarding
+3. Add authentication with role-based access control  
+4. Store configuration values in database instead of .env
+5. Allow configuration updates via admin dashboard
+6. Support secure password-based authentication
+
 ## Future Enhancements
 1. Multi-bucket operations
 2. Version control integration
