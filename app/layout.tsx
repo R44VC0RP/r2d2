@@ -82,7 +82,7 @@ export default async function RootLayout({
                 
                 <div className="flex items-center border-r border-[rgba(240,246,252,0.1)] pr-4">
                   <span className="text-gray-400 mx-2">designed by</span>
-                  <Image src="https://0o4pg1fpby.ufs.sh/f/RSbfEU0J8Dcdm3yLbxdIVFOXRtqQKykJax2d8HCTMl4E0UrG" alt="exon" width={20} height={20} />
+                  <Image src="/images/exon.png" alt="exon" width={20} height={20} className="rounded-full" />
                   <div className="text-gray-300 ml-2">exon</div>
                 </div>
                 <AuthHeader session={session} />
