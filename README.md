@@ -1,3 +1,6 @@
+# The speedup cloudflare R2 (and soon KV) needed.
+
+![Frame 4](https://github.com/user-attachments/assets/a1c736a9-6de2-4130-aea8-d52ae3503692)
 
 
 ## Getting Started
