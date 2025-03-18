@@ -2,15 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import { getR2Client } from '@/lib/r2';
+import { withAuth } from '@/lib/api-middleware';
 
 type Context = {
   params: Promise<{ name: string; key: string[] }>;
 };
 
-export async function GET(
-  request: NextRequest,
-  context: Context
-) {
+// GET handler implementation
+async function getObject(request: NextRequest, context: Context) {
   try {
     console.log('🚀 Starting GET request for object');
     
@@ -66,10 +65,8 @@ export async function GET(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  context: Context
-) {
+// DELETE handler implementation
+async function deleteObject(request: NextRequest, context: Context) {
   try {
     console.log('🚀 Starting DELETE request for object');
     
@@ -115,4 +112,8 @@ export async function DELETE(
       { status: 500 }
     );
   }
-} 
+}
+
+// Apply authentication middleware to handlers
+export const GET = withAuth(getObject);
+export const DELETE = withAuth(deleteObject); 

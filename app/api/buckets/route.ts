@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, ListBucketsCommand, HeadBucketCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { getR2Client, getR2Credentials } from '@/lib/r2';
+import { withAuth, withAdminAuth } from '@/lib/api-middleware';
 
 // Function to get bucket domains (public access and Workers)
 async function getBucketDomains(bucketName: string) {
@@ -120,7 +121,8 @@ async function getBucketDetails(bucketName: string, s3: S3Client) {
   }
 }
 
-export async function GET(request: NextRequest) {
+// GET handler with authentication
+async function getBuckets(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('query')?.toLowerCase() || '';
@@ -178,7 +180,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+// POST handler with admin-only authentication
+async function createBucket(request: NextRequest) {
   try {
     const { name, publicAccess = false } = await request.json();
     
@@ -265,4 +268,8 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
+
+// Apply authentication middleware to handlers
+export const GET = withAuth(getBuckets);
+export const POST = withAdminAuth(createBucket); // Only admins can create buckets 

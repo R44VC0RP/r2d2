@@ -3,6 +3,7 @@ import { hash } from 'bcryptjs';
 import { db } from '@/db';
 import { users } from '@/db/schema';
 
+// This route is specifically exempt from auth checks because it's used for initial setup
 export async function POST(request: Request) {
   try {
     const { name, email, password } = await request.json();
