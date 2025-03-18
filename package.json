@@ -28,8 +28,7 @@
     "next-auth": "^5.0.0-beta.25",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-icons": "^5.5.0",
-    "tsx": "^4.7.0"
+    "react-icons": "^5.5.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
@@ -39,16 +38,7 @@
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.30.5",
     "tailwindcss": "^4",
+    "tsx": "^4.7.0",
     "typescript": "^5"
-  },
-  "optionalDependencies": {
-    "@tailwindcss/oxide-linux-x64-gnu": "^4.0.7",
-    "@tailwindcss/oxide-linux-arm64-gnu": "^4.0.7",
-    "@tailwindcss/oxide-darwin-x64": "^4.0.7",
-    "@tailwindcss/oxide-darwin-arm64": "^4.0.7",
-    "lightningcss-linux-x64-gnu": "^1.29.1",
-    "lightningcss-linux-arm64-gnu": "^1.29.1",
-    "lightningcss-darwin-x64": "^1.29.1",
-    "lightningcss-darwin-arm64": "^1.29.1"
   }
 }
