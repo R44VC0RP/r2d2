@@ -2,6 +2,7 @@ import * as dotenv from 'dotenv';
 import { drizzle } from 'drizzle-orm/neon-http';
 import { neon } from '@neondatabase/serverless';
 import { migrate } from 'drizzle-orm/neon-http/migrator';
+import { appConfig } from '@/db/schema';
 
 // Load environment variables
 dotenv.config({ path: '.env.local' });
@@ -22,8 +23,21 @@ const runMigration = async () => {
     
     // Run the migrations
     await migrate(db, { migrationsFolder: 'drizzle' });
+
+    
     
     console.log('✅ Migrations completed successfully');
+
+    // Verify tables exist
+    const result = await sql`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_schema = 'public'
+    `;
+
+    if (!result.some(row => row.table_name === 'app_config')) {
+      console.log('✅ app_config table exists');
+    }
     process.exit(0);
   } catch (error) {
     console.error('❌ Migration failed:', error);

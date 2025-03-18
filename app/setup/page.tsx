@@ -138,6 +138,9 @@ export default function SetupPage() {
                   src="/images/setup-guide/admin.png"
                   alt="Admin setup guide"
                   fill
+                  priority
+                  sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                  className="object-contain"
                 />
               </div>
             </div>
@@ -158,6 +161,8 @@ export default function SetupPage() {
                       src={focusedInput ? r2GuideContent[focusedInput].image : '/images/setup-guide/admin.png'}
                       alt={focusedInput ? `Guide for ${focusedInput}` : 'R2 setup guide'}
                       fill
+                      priority
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       className="object-contain"
                     />
                   </motion.div>
