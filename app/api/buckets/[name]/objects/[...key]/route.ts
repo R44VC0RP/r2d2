@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
 import { getR2Client } from '@/lib/r2';
 
@@ -61,6 +61,57 @@ export async function GET(
     });
     return NextResponse.json(
       { error: 'Failed to fetch object', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: Context
+) {
+  try {
+    console.log('🚀 Starting DELETE request for object');
+    
+    // Ensure params are properly awaited
+    const params = await context.params;
+    const bucketName = params.name;
+    const keyParts = params.key;
+    const key = keyParts.join('/');
+    
+    console.log('📦 Bucket:', bucketName);
+    console.log('🔑 Key:', key);
+    console.log('🔍 Full request URL:', request.url);
+    console.log('🛣️ Request method:', request.method);
+
+    if (!bucketName || !key) {
+      console.log('❌ Missing bucket name or key');
+      return NextResponse.json(
+        { error: 'Bucket name and object key are required' },
+        { status: 400 }
+      );
+    }
+
+    console.log('📡 Sending delete request to R2');
+    const s3 = await getR2Client();
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    await s3.send(command);
+    console.log('✅ Object deleted successfully');
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('💥 Error deleting object:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    return NextResponse.json(
+      { error: 'Failed to delete object', details: error.message },
       { status: 500 }
     );
   }

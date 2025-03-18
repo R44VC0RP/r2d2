@@ -306,21 +306,99 @@ export default function BucketView() {
     if (!confirmed) return;
 
     try {
-      await Promise.all(
+      console.log('Starting deletion of', selectedObjects.size, 'objects');
+      
+      const results = await Promise.all(
         Array.from(selectedObjects).map(async (key) => {
-          const response = await fetch(`/api/buckets/${name}/objects/${encodeURIComponent(key)}`, {
-            method: 'DELETE',
-          });
-          if (!response.ok) throw new Error(`Failed to delete ${key}`);
+          console.log('Attempting to delete:', key);
+          try {
+            // Construct URL correctly by appending the key after /objects/
+            const url = `/api/buckets/${encodeURIComponent(name)}/objects/${encodeURIComponent(key)}`;
+            console.log('DELETE request to:', url);
+            
+            const response = await fetch(url, {
+              method: 'DELETE',
+              headers: {
+                'Accept': 'application/json',
+                'Cache-Control': 'no-cache'
+              },
+              cache: 'no-store'
+            });
+            
+            console.log('Delete response for', key, ':', {
+              status: response.status,
+              statusText: response.statusText
+            });
+
+            // Try to get response text for debugging
+            let responseText = '';
+            try {
+              responseText = await response.text();
+              console.log('Response content:', responseText);
+            } catch (textError) {
+              console.warn('Could not read response text:', textError);
+            }
+
+            if (!response.ok) {
+              console.error('Delete failed for', key, ':', {
+                status: response.status,
+                statusText: response.statusText,
+                body: responseText
+              });
+              throw new Error(`Failed to delete ${key}: ${response.status} ${response.statusText} - ${responseText}`);
+            }
+
+            return { key, success: true };
+          } catch (error) {
+            console.error('Error deleting', key, ':', error);
+            return { key, success: false, error };
+          }
         })
       );
+
+      const failures = results.filter(r => !r.success);
+      if (failures.length > 0) {
+        console.error('Some deletions failed:', failures);
+        throw new Error(`Failed to delete ${failures.length} objects`);
+      }
       
+      console.log('All objects deleted successfully');
+      
+      // Clear selected objects
       setSelectedObjects(new Set());
-      // Invalidate and refetch
-      // TODO: Add proper invalidation
+
+      console.log('Invalidating cache...');
+      // Remove the queries from cache
+      queryClient.removeQueries({ queryKey: ['bucketObjects', name] });
+      
+      console.log('Refetching data...');
+      // Refetch the data with infinite query
+      await queryClient.fetchInfiniteQuery({
+        queryKey: ['bucketObjects', name, searchQuery],
+        queryFn: async ({ pageParam = null }) => {
+          const searchParams = new URLSearchParams();
+          if (pageParam) {
+            searchParams.set('continuationToken', pageParam as string);
+          }
+          if (searchQuery) {
+            searchParams.set('prefix', searchQuery);
+          }
+          const response = await fetch(`/api/buckets/${encodeURIComponent(name)}/objects?${searchParams}`, {
+            cache: 'no-store',
+            headers: {
+              'Cache-Control': 'no-cache'
+            }
+          });
+          if (!response.ok) throw new Error('Failed to fetch objects');
+          return response.json();
+        },
+        initialPageParam: null,
+      });
+      
+      console.log('Data refresh complete');
     } catch (error) {
-      console.error('Failed to delete objects:', error);
-      alert('Failed to delete some objects');
+      console.error('Delete operation failed:', error);
+      alert(error instanceof Error ? error.message : 'Failed to delete some objects');
     }
   };
 

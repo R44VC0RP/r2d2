@@ -106,29 +106,57 @@ export async function DELETE(
   context: Context
 ) {
   try {
-    const { name: bucketName } = await context.params;
-    const key = request.url.split('/objects/')[1];
+    console.log('🚀 Starting DELETE request for object in objects route');
+    
+    // Ensure params are properly awaited
+    const params = await context.params;
+    const bucketName = params.name;
+    
+    console.log('📦 Bucket:', bucketName);
+    console.log('🔍 Full request URL:', request.url);
+    console.log('🛣️ Request method:', request.method);
+    
+    // Extract key from URL
+    const urlParts = request.url.split('/objects/');
+    if (urlParts.length < 2) {
+      console.error('❌ Invalid URL format, cannot extract key:', request.url);
+      return NextResponse.json(
+        { error: 'Invalid URL format' },
+        { status: 400 }
+      );
+    }
+    
+    const key = decodeURIComponent(urlParts[1]);
+    console.log('🔑 Extracted Key:', key);
     
     if (!bucketName || !key) {
+      console.error('❌ Missing bucket name or key, bucketName:', bucketName, 'key:', key);
       return NextResponse.json(
         { error: 'Bucket name and object key are required' },
         { status: 400 }
       );
     }
 
+    console.log('📡 Sending delete request to R2 for key:', key);
     const s3 = await getR2Client();
     const command = new DeleteObjectCommand({
       Bucket: bucketName,
-      Key: decodeURIComponent(key),
+      Key: key,
     });
 
     await s3.send(command);
+    console.log('✅ Object deleted successfully:', key);
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting object:', error);
+  } catch (error: any) {
+    console.error('💥 Error deleting object:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
     return NextResponse.json(
-      { error: 'Failed to delete object' },
+      { error: 'Failed to delete object', details: error.message },
       { status: 500 }
     );
   }
