@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { FaCloudUploadAlt, FaSpinner, FaTimes, FaCheck, FaExclamationTriangle, FaCog, FaInfoCircle } from 'react-icons/fa';
 import { motion } from 'framer-motion';
 import Modal from './Modal';
@@ -17,7 +17,7 @@ interface UploadingFile {
   id: string;
   file: File;
   progress: number;
-  status: 'pending' | 'uploading' | 'success' | 'error';
+  status: 'pending' | 'uploading' | 'processing' | 'success' | 'error';
   error?: string;
 }
 
@@ -94,10 +94,41 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
       // Set up progress tracking
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable) {
+          // Calculate exact upload progress (0-100%)
           const progress = Math.round((event.loaded / event.total) * 100);
+          
+          // Update file progress
           setFiles(prev => 
-            prev.map(f => f.id === fileItem.id ? { ...f, progress } : f)
+            prev.map(f => {
+              if (f.id === fileItem.id) {
+                return { 
+                  ...f, 
+                  progress: progress,
+                  status: f.status === 'pending' || f.status === 'uploading' ? 'uploading' : f.status 
+                };
+              }
+              return f;
+            })
           );
+          
+          // Log for debugging
+          console.log(`File ${fileItem.file.name} upload progress: ${progress}%, loaded: ${event.loaded}, total: ${event.total}`);
+          
+          // When upload reaches 100%, change status to processing
+          if (progress === 100) {
+            setFiles(prev => 
+              prev.map(f => {
+                if (f.id === fileItem.id && f.status === 'uploading') {
+                  return { 
+                    ...f, 
+                    status: 'processing'
+                  };
+                }
+                return f;
+              })
+            );
+            console.log(`File ${fileItem.file.name} upload complete, now processing on server`);
+          }
         }
       });
 
@@ -108,14 +139,27 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
           delete activeUploads.current[fileItem.id];
           
           if (xhr.status >= 200 && xhr.status < 300) {
+            console.log(`File ${fileItem.file.name} successfully processed by server`);
+            // Ensure progress is set to 100% and status is success
             setFiles(prev => 
-              prev.map(f => f.id === fileItem.id ? { ...f, status: 'success', progress: 100 } : f)
+              prev.map(f => f.id === fileItem.id ? { 
+                ...f, 
+                status: 'success', 
+                progress: 100 
+              } : f)
             );
             resolve();
           } else {
-            const errorMsg = `Upload failed: ${xhr.statusText}`;
+            const errorMsg = `Upload failed: ${xhr.statusText} (${xhr.status})`;
+            console.error(`File ${fileItem.file.name} upload failed:`, errorMsg);
             setFiles(prev => 
-              prev.map(f => f.id === fileItem.id ? { ...f, status: 'error', error: errorMsg } : f)
+              prev.map(f => f.id === fileItem.id ? { 
+                ...f, 
+                status: 'error', 
+                error: errorMsg,
+                // Keep the progress as it was when the error occurred
+                progress: f.progress
+              } : f)
             );
             reject(new Error(errorMsg));
           }
@@ -126,8 +170,15 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
           delete activeUploads.current[fileItem.id];
           
           const errorMsg = 'Network error occurred';
+          console.error(`File ${fileItem.file.name} network error:`, errorMsg);
           setFiles(prev => 
-            prev.map(f => f.id === fileItem.id ? { ...f, status: 'error', error: errorMsg } : f)
+            prev.map(f => f.id === fileItem.id ? { 
+              ...f, 
+              status: 'error', 
+              error: errorMsg,
+              // Keep the progress as it was when the error occurred
+              progress: f.progress 
+            } : f)
           );
           reject(new Error(errorMsg));
         };
@@ -136,8 +187,15 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
           // Remove from active uploads
           delete activeUploads.current[fileItem.id];
           
+          console.log(`File ${fileItem.file.name} upload cancelled`);
           setFiles(prev => 
-            prev.map(f => f.id === fileItem.id ? { ...f, status: 'error', error: 'Upload cancelled' } : f)
+            prev.map(f => f.id === fileItem.id ? { 
+              ...f, 
+              status: 'error', 
+              error: 'Upload cancelled',
+              // Reset progress to 0 on cancel
+              progress: 0
+            } : f)
           );
           reject(new Error('Upload cancelled'));
         };
@@ -179,79 +237,22 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
       }
     } finally {
       setUploading(false);
-    }
-  };
-
-  const getUploadButtonState = () => {
-    const pendingFiles = files.filter(f => f.status === 'pending');
-    const uploadingFiles = files.filter(f => f.status === 'uploading');
-    const successFiles = files.filter(f => f.status === 'success');
-    const errorFiles = files.filter(f => f.status === 'error');
-    
-    if (uploading) {
-      return {
-        text: 'Uploading...',
-        icon: <FaSpinner className="animate-spin mr-2" />,
-        disabled: false,
-        className: '',
-      };
-    }
-    
-    if (pendingFiles.length === 0 && successFiles.length > 0 && errorFiles.length === 0) {
-      return {
-        text: 'All Files Uploaded',
-        icon: <FaCheck className="mr-2" />,
-        disabled: true,
-        className: 'opacity-60 cursor-not-allowed',
-      };
-    }
-    
-    if (pendingFiles.length === 0 && errorFiles.length > 0) {
-      return {
-        text: 'Retry Failed Uploads',
-        icon: <FaExclamationTriangle className="mr-2" />,
-        disabled: false,
-        className: '',
-      };
-    }
-    
-    return {
-      text: 'Upload Files',
-      icon: <FaCloudUploadAlt className="mr-2" />,
-      disabled: pendingFiles.length === 0,
-      className: pendingFiles.length === 0 ? 'opacity-60 cursor-not-allowed' : '',
-    };
-  };
-
-  const uploadButtonState = getUploadButtonState();
-
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return '0 Bytes';
-    
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
-    
-    // Add bounds checking to prevent errors
-    if (bytes < 0) return '0 Bytes';
-    
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    
-    // Ensure the index is within the valid range
-    const index = Math.min(i, sizes.length - 1);
-    
-    return parseFloat((bytes / Math.pow(k, index)).toFixed(2)) + ' ' + sizes[index];
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'uploading':
-        return <FaSpinner className="animate-spin text-blue-400" />;
-      case 'success':
-        return <FaCheck className="text-green-400" />;
-      case 'error':
-        return <FaExclamationTriangle className="text-red-400" />;
-      default:
-        return null;
+      
+      // Check if all uploads were successful
+      const allFiles = [...files];
+      const hasErrors = allFiles.some(f => f.status === 'error');
+      const hasPending = allFiles.some(f => f.status === 'pending' || f.status === 'uploading' || f.status === 'processing');
+      const allUploaded = allFiles.every(f => f.status === 'success');
+      
+      // If this was called directly (not from uploadAll) and all files are done,
+      // auto-close the modal on success
+      if (allUploaded && !hasErrors && !hasPending) {
+        console.log('All files processed successfully, closing modal');
+        setTimeout(() => {
+          setFiles([]);
+          onClose();
+        }, 1000); // Add a small delay to show success state briefly
+      }
     }
   };
 
@@ -287,14 +288,31 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
       queryClient.removeQueries({ queryKey: ['bucketObjects', bucketName] });
       
       // Then refetch the data - wrapping in a try/catch to handle any refresh errors
-      await queryClient.fetchQuery({
+      await queryClient.fetchInfiniteQuery({
         queryKey: ['bucketObjects', bucketName, ''],
-        queryFn: async () => {
-          const response = await fetch(`/api/buckets/${encodeURIComponent(bucketName)}/objects`);
+        queryFn: async ({ pageParam = null }) => {
+          const searchParams = new URLSearchParams();
+          if (pageParam) {
+            searchParams.set('continuationToken', pageParam as string);
+          }
+          const response = await fetch(`/api/buckets/${encodeURIComponent(bucketName)}/objects?${searchParams}`);
           if (!response.ok) throw new Error('Failed to fetch objects');
           return response.json();
-        }
+        },
+        initialPageParam: null,
       });
+      
+      // Check if all uploads were successful and close the modal if they were
+      const hasErrors = files.some(f => f.status === 'error');
+      const hasPending = files.some(f => f.status === 'pending' || f.status === 'uploading' || f.status === 'processing');
+      
+      if (!hasErrors && !hasPending) {
+        console.log('All files uploaded successfully, closing modal');
+        setTimeout(() => {
+          setFiles([]);
+          onClose();
+        }, 1000); // Add a small delay to show success state briefly
+      }
     } catch (error) {
       console.error('Error refreshing data after upload:', error);
       // Even if refresh fails, we don't want to fail the upload process
@@ -340,6 +358,106 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
         setFiles([]);
         onClose();
       }
+    }
+  };
+
+  // Add a function to calculate overall progress that accounts for in-progress uploads
+  const calculateOverallProgress = (files: UploadingFile[]): number => {
+    if (!Array.isArray(files) || files.length === 0) return 0;
+    
+    // Sum up all file progress
+    const totalProgress = files.reduce((acc, file) => {
+      // Completed files count as 100%
+      if (file.status === 'success' || file.status === 'processing') return acc + 100;
+      // In-progress files use their actual progress
+      if (file.status === 'uploading') return acc + file.progress;
+      // Pending files count as 0%
+      return acc;
+    }, 0);
+    
+    // Divide by the total possible progress (100% * number of files)
+    return Math.round(totalProgress / (files.length * 100) * 100);
+  };
+
+  const getUploadButtonState = () => {
+    const pendingFiles = files.filter(f => f.status === 'pending');
+    const uploadingFiles = files.filter(f => f.status === 'uploading');
+    const successFiles = files.filter(f => f.status === 'success');
+    const errorFiles = files.filter(f => f.status === 'error');
+    
+    if (uploading) {
+      return {
+        text: 'Uploading...',
+        icon: <FaSpinner className="animate-spin mr-2" />,
+        disabled: false,
+        className: '',
+        onClick: cancelAllUploads
+      };
+    }
+    
+    if (pendingFiles.length === 0 && successFiles.length > 0 && errorFiles.length === 0) {
+      return {
+        text: 'All Files Uploaded',
+        icon: <FaCheck className="mr-2" />,
+        disabled: false,
+        className: 'bg-green-600 hover:bg-green-700',
+        onClick: () => {
+          setFiles([]);
+          onClose();
+        }
+      };
+    }
+    
+    if (pendingFiles.length === 0 && errorFiles.length > 0) {
+      return {
+        text: 'Retry Failed Uploads',
+        icon: <FaExclamationTriangle className="mr-2" />,
+        disabled: false,
+        className: '',
+        onClick: retryFailedUploads
+      };
+    }
+    
+    return {
+      text: 'Upload Files',
+      icon: <FaCloudUploadAlt className="mr-2" />,
+      disabled: pendingFiles.length === 0,
+      className: pendingFiles.length === 0 ? 'opacity-60 cursor-not-allowed' : '',
+      onClick: uploadAll
+    };
+  };
+
+  const uploadButtonState = getUploadButtonState();
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 Bytes';
+    
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    
+    // Add bounds checking to prevent errors
+    if (bytes < 0) return '0 Bytes';
+    
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    
+    // Ensure the index is within the valid range
+    const index = Math.min(i, sizes.length - 1);
+    
+    return parseFloat((bytes / Math.pow(k, index)).toFixed(2)) + ' ' + sizes[index];
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case 'uploading':
+        return <FaSpinner className="animate-spin text-blue-400" />;
+      case 'processing':
+        return <FaCog className="animate-spin text-blue-500" />;
+      case 'success':
+        return <FaCheck className="text-green-400" />;
+      case 'error':
+        return <FaExclamationTriangle className="text-red-400" />;
+      default:
+        return null;
     }
   };
 
@@ -418,8 +536,7 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
                     <div
                       className="bg-[#EF6351] h-2 rounded-full transition-all duration-300"
                       style={{ 
-                        width: `${Array.isArray(files) && files.length > 0 ? 
-                          (files.filter(f => f.status === 'success').length / files.length) * 100 : 0}%` 
+                        width: `${calculateOverallProgress(files)}%` 
                       }}
                     ></div>
                   </div>
@@ -468,11 +585,12 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
                 </motion.button>
                 <motion.button
                   type="button"
-                  onClick={uploading ? cancelAllUploads : uploadAll}
-                  whileHover={{ backgroundColor: uploading ? '#b91c1c' : '#F38375' }}
+                  onClick={uploadButtonState.onClick}
+                  whileHover={{ backgroundColor: uploadButtonState.className.includes('green') ? '#059669' : (uploading ? '#b91c1c' : '#F38375') }}
                   whileTap={{ scale: 0.97 }}
+                  disabled={uploadButtonState.disabled}
                   className={`inline-flex items-center px-4 py-2 ${
-                    uploading ? 'bg-red-700' : 'bg-[#EF6351]'
+                    uploading ? 'bg-red-700' : uploadButtonState.className || 'bg-[#EF6351]'
                   } text-white text-sm font-semibold rounded-md border border-[rgba(240,246,252,0.1)] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#EF6351]/40`}
                 >
                   {uploading ? (
@@ -522,6 +640,14 @@ export default function FileUploadModal({ isOpen, onClose, bucketName, currentPr
                               <div
                                 className="bg-[#EF6351] h-1.5 rounded-full"
                                 style={{ width: `${file.progress}%` }}
+                              ></div>
+                            </div>
+                          )}
+                          {file.status === 'processing' && (
+                            <div className="w-full bg-[#21262D] rounded-full h-1.5 mt-1">
+                              <div
+                                className="bg-blue-500 h-1.5 rounded-full animate-pulse"
+                                style={{ width: '100%' }}
                               ></div>
                             </div>
                           )}

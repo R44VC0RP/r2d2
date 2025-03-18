@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { S3Client, ListBucketsCommand, HeadBucketCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
-
-const s3 = new S3Client({
-  region: 'auto',
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.CLOUDFLARE_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.CLOUDFLARE_SECRET_ACCESS_KEY!,
-  },
-});
+import { getR2Client, getR2Credentials } from '@/lib/r2';
+import { withAuth, withAdminAuth } from '@/lib/api-middleware';
 
 // Function to get bucket domains (public access and Workers)
 async function getBucketDomains(bucketName: string) {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-  const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+  const credentials = await getR2Credentials();
+  const accountId = credentials.CLOUDFLARE_ACCOUNT_ID;
+  const apiToken = credentials.CLOUDFLARE_API_TOKEN;
 
   try {
     // Check for public bucket domains
@@ -37,7 +31,6 @@ async function getBucketDomains(bucketName: string) {
 
     // Add public bucket domain if public access is enabled
     if (publicData.result?.public_access?.enabled) {
-      // Public bucket URL format: https://<BUCKET_NAME>.<ACCOUNT_ID>.r2.dev
       domains.push(`${bucketName}.${accountId}.r2.dev`);
     }
 
@@ -59,10 +52,8 @@ async function getBucketDomains(bucketName: string) {
 
     if (workersResponse.ok) {
       const workersData = await workersResponse.json();
-      // Get all Worker services that might be using this bucket
       const workerServices = workersData.result || [];
       
-      // For each Worker service, check its bindings
       for (const service of workerServices) {
         const serviceResponse = await fetch(
           `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/services/${service.id}`,
@@ -76,20 +67,18 @@ async function getBucketDomains(bucketName: string) {
 
         if (serviceResponse.ok) {
           const serviceData = await serviceResponse.json();
-          // Check if this Worker has a binding to our bucket
           const hasR2Binding = serviceData.result?.bindings?.some(
             (binding: any) => binding.type === 'r2_bucket' && binding.bucket_name === bucketName
           );
 
           if (hasR2Binding && serviceData.result?.domains) {
-            // Add all domains associated with this Worker
             domains.push(...serviceData.result.domains.map((d: any) => d.hostname));
           }
         }
       }
     }
 
-    return [...new Set(domains)]; // Remove any duplicates
+    return [...new Set(domains)];
   } catch (error) {
     console.error(`Error fetching domains for bucket ${bucketName}:`, error);
     return [];
@@ -97,7 +86,7 @@ async function getBucketDomains(bucketName: string) {
 }
 
 // Function to get bucket size and operation counts using S3 API
-async function getBucketDetails(bucketName: string) {
+async function getBucketDetails(bucketName: string, s3: S3Client) {
   try {
     const command = new ListObjectsV2Command({
       Bucket: bucketName,
@@ -105,18 +94,12 @@ async function getBucketDetails(bucketName: string) {
 
     const response = await s3.send(command);
     
-    // Calculate total size
     let totalSize = 0;
     response.Contents?.forEach(object => {
       totalSize += object.Size || 0;
     });
 
-    // For operations, we'll use the number of objects as a proxy for Class B operations
-    // since each object would have been read at least once
     const classBOperations = response.Contents?.length || 0;
-    
-    // For Class A operations, we can use KeyCount as a proxy since each object
-    // would have been written at least once
     const classAOperations = response.KeyCount || 0;
 
     return {
@@ -138,11 +121,13 @@ async function getBucketDetails(bucketName: string) {
   }
 }
 
-export async function GET(request: NextRequest) {
+// GET handler with authentication
+async function getBuckets(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const query = searchParams.get('query')?.toLowerCase() || '';
 
+    const s3 = await getR2Client();
     const command = new ListBucketsCommand({});
     const response = await s3.send(command);
 
@@ -155,7 +140,7 @@ export async function GET(request: NextRequest) {
           
           // Fetch bucket details and domains in parallel
           const [details, domains] = await Promise.all([
-            getBucketDetails(name),
+            getBucketDetails(name, s3),
             getBucketDomains(name)
           ]);
 
@@ -181,7 +166,6 @@ export async function GET(request: NextRequest) {
         })
     );
 
-    // Add cache control headers for the response
     const headers = new Headers({
       'Cache-Control': 'public, max-age=60, stale-while-revalidate=300',
     });
@@ -196,7 +180,8 @@ export async function GET(request: NextRequest) {
   }
 }
 
-export async function POST(request: NextRequest) {
+// POST handler with admin-only authentication
+async function createBucket(request: NextRequest) {
   try {
     const { name, publicAccess = false } = await request.json();
     
@@ -216,8 +201,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-    const apiToken = process.env.CLOUDFLARE_API_TOKEN;
+    const credentials = await getR2Credentials();
+    const accountId = credentials.CLOUDFLARE_ACCOUNT_ID;
+    const apiToken = credentials.CLOUDFLARE_API_TOKEN;
 
     // Create bucket using Cloudflare API
     const response = await fetch(
@@ -262,8 +248,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get the created bucket details for response
-    const details = await getBucketDetails(name);
+    const s3 = await getR2Client();
+    const details = await getBucketDetails(name, s3);
     const domains = await getBucketDomains(name);
 
     return NextResponse.json({
@@ -282,4 +268,8 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} 
+}
+
+// Apply authentication middleware to handlers
+export const GET = withAuth(getBuckets);
+export const POST = withAdminAuth(createBucket); // Only admins can create buckets 

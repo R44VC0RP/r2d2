@@ -1,31 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
-
-// Initialize S3 client outside request handler
-const s3 = new S3Client({
-  region: "auto",
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.CLOUDFLARE_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.CLOUDFLARE_SECRET_ACCESS_KEY || '',
-  },
-  requestChecksumCalculation: "WHEN_REQUIRED",
-  responseChecksumValidation: "WHEN_REQUIRED"
-});
+import { getR2Client } from '@/lib/r2';
+import { withAuth } from '@/lib/api-middleware';
 
 type Context = {
   params: Promise<{ name: string; key: string[] }>;
 };
 
-export async function GET(
-  request: NextRequest,
-  context: Context
-) {
+// GET handler implementation
+async function getObject(request: NextRequest, context: Context) {
   try {
     console.log('🚀 Starting GET request for object');
     
-    // Ensure we have the bucket name and key
     const { name: bucketName, key: keyParts } = await context.params;
     const key = keyParts.join('/');
     
@@ -40,16 +27,8 @@ export async function GET(
       );
     }
 
-    // Validate credentials
-    if (!process.env.CLOUDFLARE_ACCESS_KEY_ID || !process.env.CLOUDFLARE_SECRET_ACCESS_KEY) {
-      console.log('❌ Missing Cloudflare credentials');
-      return NextResponse.json(
-        { error: 'Cloudflare credentials not configured' },
-        { status: 500 }
-      );
-    }
-
     console.log('📡 Sending request to R2');
+    const s3 = await getR2Client();
     const command = new GetObjectCommand({
       Bucket: bucketName,
       Key: key,
@@ -58,7 +37,6 @@ export async function GET(
     const response = await s3.send(command);
     console.log('✅ R2 response received');
 
-    // Convert the readable stream to a Response
     if (response.Body instanceof Readable) {
       return new NextResponse(response.Body as any, {
         headers: {
@@ -85,4 +63,57 @@ export async function GET(
       { status: 500 }
     );
   }
-} 
+}
+
+// DELETE handler implementation
+async function deleteObject(request: NextRequest, context: Context) {
+  try {
+    console.log('🚀 Starting DELETE request for object');
+    
+    // Ensure params are properly awaited
+    const params = await context.params;
+    const bucketName = params.name;
+    const keyParts = params.key;
+    const key = keyParts.join('/');
+    
+    console.log('📦 Bucket:', bucketName);
+    console.log('🔑 Key:', key);
+    console.log('🔍 Full request URL:', request.url);
+    console.log('🛣️ Request method:', request.method);
+
+    if (!bucketName || !key) {
+      console.log('❌ Missing bucket name or key');
+      return NextResponse.json(
+        { error: 'Bucket name and object key are required' },
+        { status: 400 }
+      );
+    }
+
+    console.log('📡 Sending delete request to R2');
+    const s3 = await getR2Client();
+    const command = new DeleteObjectCommand({
+      Bucket: bucketName,
+      Key: key,
+    });
+
+    await s3.send(command);
+    console.log('✅ Object deleted successfully');
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error('💥 Error deleting object:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    return NextResponse.json(
+      { error: 'Failed to delete object', details: error.message },
+      { status: 500 }
+    );
+  }
+}
+
+// Apply authentication middleware to handlers
+export const GET = withAuth(getObject);
+export const DELETE = withAuth(deleteObject); 
