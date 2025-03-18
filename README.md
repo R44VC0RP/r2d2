@@ -7,13 +7,16 @@
 
 Don't wanna deal with all this? We got you covered.
 
-Fully hosted version with authentication and a database (thanks Neon!) (Note on vercel you cannot upload files larger than 10mb)
+Fully hosted version with authentication and a database (thanks to a Neon Postgres Integration)
+
+NOTE: If deploying on vercel your static file upload limit is 100MB for Hobby accounts and 1GB for Pro accounts.
+https://vercel.com/docs/limits#static-file-uploads
 
 [![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FR44VC0RP%2Fr2d2&env=AUTH_SECRET&envDescription=You%20are%20going%20to%20need%20to%20set%20a%20random%20AUTH_SECRET%20and%20use%20Neon%20DB%20for%20the%20database%20integration.&project-name=cloudflare-r2-d2&repository-name=cloudflare-r2-d2&integration-ids=oac_3sK3gnG06emjIEVL09jjntDD)
 
 
 
-### Environment Setup
+### Environment Setup (this is no longer needed in the new version that uses the one touch setup)
 
 1. Copy the example environment file to create your local environment file:
 
